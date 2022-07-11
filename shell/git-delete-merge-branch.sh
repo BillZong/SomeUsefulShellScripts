@@ -1,0 +1,1 @@
+git branch -v | grep "\[gone\]" | awk '{print $1}' | while read b; do git branch -D $b; done
