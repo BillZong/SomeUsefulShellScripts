@@ -3,4 +3,4 @@ if [ $# -lt 1 ];then
   exit -1
 fi
 
-git filter-branch --force --index-filter "git rm --cached --ignore-unmatch $1" --prune-empty --tag-name-filter cat -- --all
+git filter-branch --force --index-filter "git rm --cached -f --ignore-unmatch $1" --prune-empty --tag-name-filter cat -- --all
