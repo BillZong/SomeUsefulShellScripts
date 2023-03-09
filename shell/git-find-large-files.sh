@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Bash Version 3 required (it also works with ksh)
 [[ ${BASH_VERSINFO[0]} -lt 3 ]] && exit 1
 
