@@ -18,6 +18,15 @@ for i in "${!ARGS[@]}"; do
     continue
   }
   case "${ARGS[i]}" in
+    -h|--help)
+      echo "Usage: $0 [options...]"
+      echo " Clean local git cache."
+      echo "options:"
+      echo " -b, --branch                        Git branch, default master"
+      echo " -d, --dir, --directory <directory>  Git directory, default ."
+      echo " -h, --help                          Get help for commands"
+      exit 0
+      ;;
     -d|--dir|--directory)
       # Use +1 to access next array element and unset it
       dir="${ARGS[i+1]}"

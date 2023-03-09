@@ -20,7 +20,7 @@ for i in "${!ARGS[@]}"; do
   case "${ARGS[i]}" in
     -h|--help)
       echo "Usage: $0 [options...] file-objects-to-remove..."
-      echo " -d, --dir, --directory <directory>  Git directory"
+      echo " -d, --dir, --directory <directory>  Git directory, default ."
       echo " -h, --help                          Get help for commands"
       exit 0
       ;;
