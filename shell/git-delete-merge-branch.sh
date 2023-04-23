@@ -3,7 +3,7 @@
 # Bash Version 3 required (it also works with ksh)
 [[ ${BASH_VERSINFO[0]} -lt 3 ]] && exit 1
 
-
+# Default git directory.
 git_dir=${1-"."}
 
 # The proper way to delete branches
