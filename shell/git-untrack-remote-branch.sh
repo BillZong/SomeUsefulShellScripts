@@ -52,6 +52,7 @@ done
 
 pushd $dir
 
-git branch --remotes | grep $remote | egrep -v "(^\*|master|main|develop|dev)" | xargs -L1 git branch --delete --remotes
+#git branch --remotes | egrep -v "(^\*|master|main|develop|dev)" | grep $remote | xargs -L1 git branch --delete --remotes
+git branch --remotes | grep $remote |  egrep -v "/(master|main|develop|dev)" | xargs -L1 git branch --delete --remotes
 
 popd
