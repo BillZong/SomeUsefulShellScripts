@@ -19,11 +19,14 @@ for i in "${!ARGS[@]}"; do
   case "${ARGS[i]}" in
     -h|--help)
       echo "Usage: $0 [options...]"
-      echo " delete all remote tracking branches except main|master|dev|develop."
+      echo "  Delete all remote tracking branches except main|master|dev|develop."
+      echo "  And don't forget to add specific remote branch tracking to your local git configuration."
+      echo "example:"
+      echo "  git config --add remote.origin.fetch +refs/heads/develop:refs/remotes/origin/develop"
       echo "options:"
-      echo " -d, --dir, --directory <directory>  Git directory, current directory by default."
-      echo " -r, --remote <remote-repository>    Remote repository name, \"origin\" by default."
-      echo " -h, --help                          Get help for commands"
+      echo "  -d, --dir, --directory <directory>  Git directory, current directory by default."
+      echo "  -r, --remote <remote-repository>    Remote repository name, \"origin\" by default."
+      echo "  -h, --help                          Get help for commands"
       exit 0
       ;;
     -d|--dir|--directory)
