@@ -1,3 +1,5 @@
+#!/bin/bash
+
 NS=$1
 kubectl get namespace $NS -o json \
             | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/" \

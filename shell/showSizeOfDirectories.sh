@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ $# -lt 1 ]; then
   echo "Usage: $0 dir_path_to_show -r ..."
   exit -1
