@@ -12,7 +12,7 @@ git_dir=${1-"."}
 # The unsafe way to delete branches
 git -C $git_dir branch -v \
  | grep "\[gone\]" \
- | egrep -v "(master|main|develop|dev)" \
+ | egrep -v "(^master|main|develop|dev$)" \
  |  awk '{print $1}' \
  | while read b; \
  do
