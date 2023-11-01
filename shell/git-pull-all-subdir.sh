@@ -1,9 +1,17 @@
 #!/bin/bash
+set -e
 
-DEPTH=${1:-1}
+if [ $# -lt 2 ]; then
+	echo "Usage: $0 {DIRECTORY} {DEPTH}"
+	exit 1
+fi
+
+DIRECTORY=$1
+DEPTH=$2
 
 # perfect one
-find . -type d -depth $DEPTH \
+find $DIRECTORY -type d -depth $DEPTH \
 	\! -name "\.*" \
+	-exec echo "Working directory: "{} \
 	-exec git --git-dir={}/.git --work-tree=$PWD/{} fetch --prune \; \
 	-exec git --git-dir={}/.git --work-tree=$PWD/{} pull origin -r \;
