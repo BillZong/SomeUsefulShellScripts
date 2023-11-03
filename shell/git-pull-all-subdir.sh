@@ -12,6 +12,6 @@ DEPTH=$2
 # perfect one
 find $DIRECTORY -type d -depth $DEPTH \
 	\! -name "\.*" \
-	-exec echo "Working directory: "{} \
+	-exec echo "Working directory: "{} \; \
 	-exec git --git-dir={}/.git --work-tree=$PWD/{} fetch --prune \; \
 	-exec git --git-dir={}/.git --work-tree=$PWD/{} pull origin -r \;
