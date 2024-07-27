@@ -3,4 +3,10 @@
 set -e
 
 # remove all exited containers
-docker rm $(docker ps -a -q -f status=exited)
+containers=$(docker ps -a -q -f status=exited)
+if [ -z "${containers}" ]; then
+    echo "no exited containers found."
+    exit 0
+fi
+
+docker rm $containers
