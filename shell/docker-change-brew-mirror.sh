@@ -13,6 +13,8 @@ if [ l"${TARGET}" != l"ustc" -a \
     exit 255
 fi
 
+echo "Well, these docker images are all deprecated, please don't use them anymore."
+
 case ${TARGET} in
     ustc )
         BREW_REPO="https://mirrors.ustc.edu.cn/brew.git"
