@@ -32,7 +32,7 @@ file=$(which $0)
 path=$(dirname "$file")
 
 # change working dir
-cd "$path/../js/keystore-to-privatekey"
+pushd "$path/../js/keystore-to-privatekey"
 
 # use node js script, which must install package
 if [[ ! -d "node_module" ]]; then
@@ -40,3 +40,5 @@ if [[ ! -d "node_module" ]]; then
 fi
 
 node main.js $@
+
+popd

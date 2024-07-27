@@ -6,7 +6,7 @@ process_ref() {
 		echo "make project output and upload to Github release"
 		echo ""
 		make
-		upload-github-release.sh -k my_token -r -p output
+		gh-upload-release.sh -k my_token -r -p output
 	else
 		echo "would not handle not tag push"
 	fi
