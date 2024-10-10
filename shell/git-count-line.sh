@@ -22,5 +22,5 @@ git --git-dir=$DIRECTORY/.git log --author="$AUTHOR_NAME" \
 --after="$BEGIN" --before="$END" \
 --pretty=tformat: --numstat \
 | awk '{ add += $1 ; subs += $2 ; loc += $1 - $2 } \
-END { printf "added lines: %s removed lines : \
-%s total lines: %s\n",add,subs,loc }'
+END { printf "added lines: %s\nremoved lines: \
+%s\ntotal lines: %s\n",add,subs,loc }'
