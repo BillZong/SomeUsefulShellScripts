@@ -78,7 +78,8 @@ if [ "$tagname" == "" ]; then
   exit 1;
 fi
 
-gitcmd="git -C $dir tag --create-reflog"
+# gitcmd="git -C $dir tag --create-reflog"
+gitcmd="git -C $dir tag"
 
 # enable signing
 if [[ $enablesign -ne 0 ]]; then
