@@ -9,6 +9,7 @@ tagname=""
 msg=""
 withlog=0
 enablesign=1
+previous_version=""
 # for skipping value
 skip=''
 
@@ -28,8 +29,7 @@ for i in "${!ARGS[@]}"; do
       echo " -m, --message <tag message>         Tag message."
       echo " -n, --name <name>                   Tag name."
       echo " --not-sign                          Not sign, enable signing by default."
-      echo " -d, --dir, --directory <directory>  Git directory, default ."
-      echo " -d, --dir, --directory <directory>  Git directory, default ."
+      echo " -p, --previous_tag                  Previous tag to include commits, default is tag which nearlist current commits."
       echo " -h, --help                          Get help for commands"
       exit 0
       ;;
@@ -58,6 +58,12 @@ for i in "${!ARGS[@]}"; do
     --not-sign)
       # It is a bool flag
       enablesign=0
+      ;;
+    -p|--previous_tag)
+      # Use +1 to access next array element and unset it
+      previous_version="${ARGS[i+1]}"
+      unset 'ARGS[i]'
+      skip=1
       ;;
     --)
       # End of arguments
@@ -103,7 +109,9 @@ if [[ $withlog -ne 0 ]]; then
 EOF
 
   # previous version
-  previous_version=$(git -C $dir tag --sort=-committerdate | tac | sed -n '1p')
+  if [[ "$previous_version" == "" ]]; then
+    previous_version=$(git -C $dir tag --sort=-committerdate | tac | sed -n '1p')
+  fi
   echo "previous version=$previous_version"
   
   # update config to disable pager on log
