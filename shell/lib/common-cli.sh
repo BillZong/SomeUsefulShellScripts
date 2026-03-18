@@ -19,11 +19,7 @@ suss_require_command() {
 }
 
 suss_is_integer() {
-    case "$1" in
-        '' | -) return 1 ;;
-        -[0-9]* | [0-9]*) return 0 ;;
-        *) return 1 ;;
-    esac
+    [[ "$1" =~ ^-?[0-9]+$ ]]
 }
 
 suss_json_escape() {
