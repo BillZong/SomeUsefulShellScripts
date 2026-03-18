@@ -44,6 +44,52 @@ func TestParseGoListDepOptionsAliases(t *testing.T) {
 	}
 }
 
+func TestParseGitCountLineOptionsDefaults(t *testing.T) {
+	options, err := parseGitCountLineOptions(map[string]interface{}{
+		"beginDate": "2024-01-01",
+		"endDate":   "2024-12-31",
+	})
+	if err != nil {
+		t.Fatalf("parseGitCountLineOptions returned error: %v", err)
+	}
+
+	if options.BeginDate != "2024-01-01" || options.EndDate != "2024-12-31" {
+		t.Fatalf("unexpected date range: %#v", options)
+	}
+	if options.Directory != "." {
+		t.Fatalf("unexpected default directory: %s", options.Directory)
+	}
+	if options.AuthorName != "" {
+		t.Fatalf("expected empty default author name, got: %s", options.AuthorName)
+	}
+}
+
+func TestParseGitCountLineOptionsAliases(t *testing.T) {
+	options, err := parseGitCountLineOptions(map[string]interface{}{
+		"begin_date":        "2024-01-01",
+		"end_date":          "2024-12-31",
+		"directory":         "/tmp/repo",
+		"author_name":       "BillZong",
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseGitCountLineOptions returned error: %v", err)
+	}
+
+	if options.BeginDate != "2024-01-01" || options.EndDate != "2024-12-31" {
+		t.Fatalf("unexpected date range: %#v", options)
+	}
+	if options.Directory != "/tmp/repo" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.AuthorName != "BillZong" {
+		t.Fatalf("unexpected author name: %s", options.AuthorName)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
 func TestNegotiateProtocolVersion(t *testing.T) {
 	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
 		t.Fatalf("expected requested supported protocol version, got %s", got)

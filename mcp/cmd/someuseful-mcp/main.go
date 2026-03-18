@@ -67,7 +67,15 @@ type goListDepOptions struct {
 	WorkingDirectory string
 }
 
-type scriptResult struct {
+type gitCountLineOptions struct {
+	BeginDate        string
+	EndDate          string
+	Directory        string
+	AuthorName       string
+	WorkingDirectory string
+}
+
+type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
 	IncludeStdlib   bool     `json:"include_stdlib"`
@@ -75,12 +83,34 @@ type scriptResult struct {
 	Dependencies    []string `json:"dependencies"`
 }
 
-type toolStructuredResult struct {
+type goListDepStructuredResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
 	IncludeStdlib   bool     `json:"includeStdlib"`
 	TestImportDepth int      `json:"testImportDepth"`
 	Dependencies    []string `json:"dependencies"`
+}
+
+type gitCountLineScriptResult struct {
+	OK           bool   `json:"ok"`
+	BeginDate    string `json:"begin_date"`
+	EndDate      string `json:"end_date"`
+	Directory    string `json:"directory"`
+	AuthorName   string `json:"author_name"`
+	AddedLines   int    `json:"added_lines"`
+	RemovedLines int    `json:"removed_lines"`
+	TotalLines   int    `json:"total_lines"`
+}
+
+type gitCountLineStructuredResult struct {
+	OK           bool   `json:"ok"`
+	BeginDate    string `json:"beginDate"`
+	EndDate      string `json:"endDate"`
+	Directory    string `json:"directory"`
+	AuthorName   string `json:"authorName"`
+	AddedLines   int    `json:"addedLines"`
+	RemovedLines int    `json:"removedLines"`
+	TotalLines   int    `json:"totalLines"`
 }
 
 type server struct {
@@ -257,7 +287,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tool go_list_dep for Go dependency inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools go_list_dep and git_count_line for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -268,68 +298,119 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 }
 
 func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
-	tool := map[string]interface{}{
-		"name":        "go_list_dep",
-		"title":       "List Go Package Dependencies",
-		"description": "Run the repository's go-list-dep CLI and return Go package dependencies as structured data.",
-		"inputSchema": map[string]interface{}{
-			"type":                 "object",
-			"additionalProperties": false,
-			"properties": map[string]interface{}{
-				"packages": map[string]interface{}{
-					"type":        "array",
-					"description": "Go packages or import paths to inspect. Defaults to ['.'].",
-					"items": map[string]interface{}{
-						"type": "string",
+	tools := []interface{}{
+		map[string]interface{}{
+			"name":        "go_list_dep",
+			"title":       "List Go Package Dependencies",
+			"description": "Run the repository's go-list-dep CLI and return Go package dependencies as structured data.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"packages": map[string]interface{}{
+						"type":        "array",
+						"description": "Go packages or import paths to inspect. Defaults to ['.'].",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
 					},
-				},
-				"includeStdlib": map[string]interface{}{
-					"type":        "boolean",
-					"description": "When true, keep standard library packages in the result.",
-				},
-				"testImportDepth": map[string]interface{}{
-					"type":        "integer",
-					"description": "How many recursive TestImports levels to follow. Defaults to 1.",
-				},
-				"workingDirectory": map[string]interface{}{
-					"type":        "string",
-					"description": "Optional working directory for the underlying go list command.",
-				},
-			},
-		},
-		"outputSchema": map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"ok": map[string]interface{}{
-					"type": "boolean",
-				},
-				"packages": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "string",
+					"includeStdlib": map[string]interface{}{
+						"type":        "boolean",
+						"description": "When true, keep standard library packages in the result.",
 					},
-				},
-				"includeStdlib": map[string]interface{}{
-					"type": "boolean",
-				},
-				"testImportDepth": map[string]interface{}{
-					"type": "integer",
-				},
-				"dependencies": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "string",
+					"testImportDepth": map[string]interface{}{
+						"type":        "integer",
+						"description": "How many recursive TestImports levels to follow. Defaults to 1.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for the underlying go list command.",
 					},
 				},
 			},
-			"required": []string{"ok", "packages", "includeStdlib", "testImportDepth", "dependencies"},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{"type": "boolean"},
+					"packages": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
+					"includeStdlib": map[string]interface{}{"type": "boolean"},
+					"testImportDepth": map[string]interface{}{
+						"type": "integer",
+					},
+					"dependencies": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
+				},
+				"required": []string{"ok", "packages", "includeStdlib", "testImportDepth", "dependencies"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Go dependency list",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
 		},
-		"annotations": map[string]interface{}{
-			"title":           "Go dependency list",
-			"readOnlyHint":    true,
-			"destructiveHint": false,
-			"idempotentHint":  true,
-			"openWorldHint":   false,
+		map[string]interface{}{
+			"name":        "git_count_line",
+			"title":       "Count Git Lines by Author",
+			"description": "Run the repository's git-count-line CLI and return added and removed line totals for an author within a date range.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"beginDate": map[string]interface{}{
+						"type":        "string",
+						"description": "Inclusive begin date, for example 2024-01-01.",
+					},
+					"endDate": map[string]interface{}{
+						"type":        "string",
+						"description": "Inclusive end date, for example 2026-01-01.",
+					},
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Repository directory to inspect. Defaults to the current directory.",
+					},
+					"authorName": map[string]interface{}{
+						"type":        "string",
+						"description": "Author name to match. Defaults to git config user.name.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+				"required": []string{"beginDate", "endDate"},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":           map[string]interface{}{"type": "boolean"},
+					"beginDate":    map[string]interface{}{"type": "string"},
+					"endDate":      map[string]interface{}{"type": "string"},
+					"directory":    map[string]interface{}{"type": "string"},
+					"authorName":   map[string]interface{}{"type": "string"},
+					"addedLines":   map[string]interface{}{"type": "integer"},
+					"removedLines": map[string]interface{}{"type": "integer"},
+					"totalLines":   map[string]interface{}{"type": "integer"},
+				},
+				"required": []string{"ok", "beginDate", "endDate", "directory", "authorName", "addedLines", "removedLines", "totalLines"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Git line count",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
 		},
 	}
 
@@ -337,7 +418,7 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 		JSONRPC: "2.0",
 		ID:      rawIDToValue(req.ID),
 		Result: map[string]interface{}{
-			"tools": []interface{}{tool},
+			"tools": tools,
 		},
 	})
 }
@@ -394,6 +475,47 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 				"isError":           false,
 			},
 		})
+	case "git_count_line":
+		result, err := runGitCountLine(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
 	default:
 		return marshalResponse(responseEnvelope{
 			JSONRPC: "2.0",
@@ -403,15 +525,15 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 	}
 }
 
-func runGoListDep(arguments map[string]interface{}) (toolStructuredResult, error) {
+func runGoListDep(arguments map[string]interface{}) (goListDepStructuredResult, error) {
 	options, err := parseGoListDepOptions(arguments)
 	if err != nil {
-		return toolStructuredResult{}, err
+		return goListDepStructuredResult{}, err
 	}
 
-	scriptPath, err := resolveGoListDepScript()
+	scriptPath, err := resolveShellScript("SUSS_GO_LIST_DEP_SCRIPT", "go-list-dep.sh")
 	if err != nil {
-		return toolStructuredResult{}, err
+		return goListDepStructuredResult{}, err
 	}
 
 	args := []string{scriptPath, "--json", "--test-import-depth", strconv.Itoa(options.TestImportDepth)}
@@ -436,17 +558,17 @@ func runGoListDep(arguments map[string]interface{}) (toolStructuredResult, error
 			if stderrText == "" {
 				stderrText = exitErr.Error()
 			}
-			return toolStructuredResult{}, fmt.Errorf("go_list_dep failed: %s", stderrText)
+			return goListDepStructuredResult{}, fmt.Errorf("go_list_dep failed: %s", stderrText)
 		}
-		return toolStructuredResult{}, fmt.Errorf("go_list_dep execution failed: %w", err)
+		return goListDepStructuredResult{}, fmt.Errorf("go_list_dep execution failed: %w", err)
 	}
 
-	var parsed scriptResult
+	var parsed goListDepScriptResult
 	if err := json.Unmarshal(output, &parsed); err != nil {
-		return toolStructuredResult{}, fmt.Errorf("invalid JSON from go-list-dep script: %w", err)
+		return goListDepStructuredResult{}, fmt.Errorf("invalid JSON from go-list-dep script: %w", err)
 	}
 
-	return toolStructuredResult{
+	return goListDepStructuredResult{
 		OK:              parsed.OK,
 		Packages:        parsed.Packages,
 		IncludeStdlib:   parsed.IncludeStdlib,
@@ -503,6 +625,121 @@ func parseGoListDepOptions(arguments map[string]interface{}) (goListDepOptions, 
 	return options, nil
 }
 
+func runGitCountLine(arguments map[string]interface{}) (gitCountLineStructuredResult, error) {
+	options, err := parseGitCountLineOptions(arguments)
+	if err != nil {
+		return gitCountLineStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_COUNT_LINE_SCRIPT", "git-count-line.sh")
+	if err != nil {
+		return gitCountLineStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--begin-date", options.BeginDate,
+		"--end-date", options.EndDate,
+		"--directory", options.Directory,
+	}
+	if options.AuthorName != "" {
+		args = append(args, "--author", options.AuthorName)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitCountLineStructuredResult{}, fmt.Errorf("git_count_line failed: %s", stderrText)
+		}
+		return gitCountLineStructuredResult{}, fmt.Errorf("git_count_line execution failed: %w", err)
+	}
+
+	var parsed gitCountLineScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitCountLineStructuredResult{}, fmt.Errorf("invalid JSON from git-count-line script: %w", err)
+	}
+
+	return gitCountLineStructuredResult{
+		OK:           parsed.OK,
+		BeginDate:    parsed.BeginDate,
+		EndDate:      parsed.EndDate,
+		Directory:    parsed.Directory,
+		AuthorName:   parsed.AuthorName,
+		AddedLines:   parsed.AddedLines,
+		RemovedLines: parsed.RemovedLines,
+		TotalLines:   parsed.TotalLines,
+	}, nil
+}
+
+func parseGitCountLineOptions(arguments map[string]interface{}) (gitCountLineOptions, error) {
+	options := gitCountLineOptions{
+		Directory: ".",
+	}
+
+	if len(arguments) == 0 {
+		return options, fmt.Errorf("beginDate is required")
+	}
+
+	if value, ok := firstValue(arguments, "beginDate", "begin_date"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("beginDate must be a non-empty string")
+		}
+		options.BeginDate = stringValue
+	}
+	if value, ok := firstValue(arguments, "endDate", "end_date"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("endDate must be a non-empty string")
+		}
+		options.EndDate = stringValue
+	}
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "authorName", "author_name"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("authorName must be a string")
+		}
+		options.AuthorName = stringValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	if options.BeginDate == "" {
+		return options, fmt.Errorf("beginDate is required")
+	}
+	if options.EndDate == "" {
+		return options, fmt.Errorf("endDate is required")
+	}
+
+	return options, nil
+}
+
 func toStringSlice(value interface{}) ([]string, error) {
 	switch typed := value.(type) {
 	case string:
@@ -548,27 +785,27 @@ func firstValue(arguments map[string]interface{}, keys ...string) (interface{}, 
 	return nil, false
 }
 
-func resolveGoListDepScript() (string, error) {
-	if explicitPath := os.Getenv("SUSS_GO_LIST_DEP_SCRIPT"); explicitPath != "" {
+func resolveShellScript(explicitEnvName, scriptName string) (string, error) {
+	if explicitPath := os.Getenv(explicitEnvName); explicitPath != "" {
 		return ensureFile(explicitPath)
 	}
 
 	candidates := make([]string, 0, 6)
 
 	if repoRoot := os.Getenv("SUSS_REPO_ROOT"); repoRoot != "" {
-		candidates = append(candidates, filepath.Join(repoRoot, "shell", "go-list-dep.sh"))
+		candidates = append(candidates, filepath.Join(repoRoot, "shell", scriptName))
 	}
 
 	if repoRoot, err := gitTopLevel(); err == nil && repoRoot != "" {
-		candidates = append(candidates, filepath.Join(repoRoot, "shell", "go-list-dep.sh"))
+		candidates = append(candidates, filepath.Join(repoRoot, "shell", scriptName))
 	}
 
 	cwd, err := os.Getwd()
 	if err == nil {
 		candidates = append(candidates,
-			filepath.Join(cwd, "shell", "go-list-dep.sh"),
-			filepath.Join(cwd, "..", "shell", "go-list-dep.sh"),
-			filepath.Join(cwd, "..", "..", "shell", "go-list-dep.sh"),
+			filepath.Join(cwd, "shell", scriptName),
+			filepath.Join(cwd, "..", "shell", scriptName),
+			filepath.Join(cwd, "..", "..", "shell", scriptName),
 		)
 	}
 
@@ -579,7 +816,7 @@ func resolveGoListDepScript() (string, error) {
 		}
 	}
 
-	return "", errors.New("unable to resolve shell/go-list-dep.sh; set SUSS_REPO_ROOT or SUSS_GO_LIST_DEP_SCRIPT")
+	return "", fmt.Errorf("unable to resolve shell/%s; set SUSS_REPO_ROOT or %s", scriptName, explicitEnvName)
 }
 
 func gitTopLevel() (string, error) {

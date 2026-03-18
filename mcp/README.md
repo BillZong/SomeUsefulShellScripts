@@ -2,9 +2,10 @@
 
 这是当前仓库的最小 MCP 骨架，目标是先把低风险、结构化、可组合的能力挂出来，再逐步扩展更多工具。
 
-当前仅暴露一个 tool：
+当前暴露两个 tool：
 
 - `go_list_dep`
+- `git_count_line`
 
 ## 特点
 
@@ -107,6 +108,8 @@ openclaw agent \
   - 显式指定仓库根目录。
 - `SUSS_GO_LIST_DEP_SCRIPT`
   - 显式指定 `go-list-dep` 脚本路径。
+- `SUSS_GIT_COUNT_LINE_SCRIPT`
+  - 显式指定 `git-count-line.sh` 脚本路径。
 
 如果两者都不传，服务会优先尝试：
 
@@ -133,6 +136,32 @@ openclaw agent \
 - `includeStdlib`
 - `testImportDepth`
 - `dependencies`
+
+## Tool: `git_count_line`
+
+输入参数：
+
+- `beginDate`
+  - `string`，必填，例如 `2024-01-01`
+- `endDate`
+  - `string`，必填，例如 `2026-01-01`
+- `directory`
+  - `string`，可选，默认 `"."`
+- `authorName`
+  - `string`，可选，默认取 `git config user.name`
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `beginDate`
+- `endDate`
+- `directory`
+- `authorName`
+- `addedLines`
+- `removedLines`
+- `totalLines`
 
 ## 设计取舍
 
