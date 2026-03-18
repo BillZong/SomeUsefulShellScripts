@@ -19,6 +19,88 @@ cd mcp
 go run ./cmd/someuseful-mcp
 ```
 
+## 接入示例
+
+### Claude Code
+
+如果你希望把这个 MCP 作为当前项目的共享配置写入 `.mcp.json`，可以在仓库根目录执行：
+
+```bash
+cd /absolute/path/to/SomeUsefulShellScripts
+
+claude mcp add --transport stdio --scope project \
+  -e SUSS_REPO_ROOT="$PWD" \
+  someuseful-shell-scripts -- \
+  go run "$PWD/mcp/cmd/someuseful-mcp"
+```
+
+执行后可以用下面的命令确认是否已注册：
+
+```bash
+claude mcp list
+```
+
+进入 Claude Code 后，也可以通过 `/mcp` 查看服务器状态。
+
+如果你更希望手工维护项目级 `.mcp.json`，可以参考下面的最小示例：
+
+```json
+{
+  "mcpServers": {
+    "someuseful-shell-scripts": {
+      "command": "go",
+      "args": [
+        "run",
+        "/absolute/path/to/SomeUsefulShellScripts/mcp/cmd/someuseful-mcp"
+      ],
+      "env": {
+        "SUSS_REPO_ROOT": "/absolute/path/to/SomeUsefulShellScripts"
+      }
+    }
+  }
+}
+```
+
+示例对话：
+
+```text
+Use the MCP tool `go_list_dep` from `someuseful-shell-scripts`
+to inspect packages ["fmt"] with includeStdlib=true and testImportDepth=0.
+```
+
+### OpenClaw
+
+OpenClaw 自身的 CLI fallback backend 不直接消费这个仓库的 MCP 配置；更实用的接法是：
+
+1. 先按上面的 Claude Code 示例把这个 MCP 注册到本机 `claude` CLI。
+2. 再让 OpenClaw 使用内置的 `claude-cli/...` backend。
+
+如果你的 OpenClaw Gateway 运行环境找不到 `claude`，可以在 OpenClaw 配置里显式指定命令路径：
+
+```json5
+{
+  agents: {
+    defaults: {
+      cliBackends: {
+        "claude-cli": {
+          command: "/opt/homebrew/bin/claude"
+        }
+      }
+    }
+  }
+}
+```
+
+然后用 `claude-cli/...` 模型发起请求：
+
+```bash
+openclaw agent \
+  --model claude-cli/opus-4.6 \
+  --message 'Use the configured MCP server `someuseful-shell-scripts` and call `go_list_dep` for packages ["fmt"].'
+```
+
+这里真正执行 MCP tool 的仍然是 `claude` CLI；OpenClaw 负责把会话路由到 `claude-cli` backend。
+
 ## 可选环境变量
 
 - `SUSS_REPO_ROOT`
@@ -57,4 +139,3 @@ go run ./cmd/someuseful-mcp
 - 当前先不引入 tasks、resources、prompts。
 - 当前先不做批量高风险操作，只暴露只读工具。
 - 当前先保留 Bash 作为执行层，后续如果某个工具复杂度上来，再换成 Go 实现。
-
