@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib/common-cli.sh
+source "$SCRIPT_DIR/lib/common-cli.sh"
+
 PROGRAM_NAME=$(basename "$0")
 
 usage() {
@@ -26,17 +30,6 @@ Examples:
 EOF
 }
 
-die() {
-    echo "[$PROGRAM_NAME] $*" >&2
-    exit 1
-}
-
-json_escape() {
-    printf '%s' "$1" | sed \
-        -e 's/\\/\\\\/g' \
-        -e 's/"/\\"/g'
-}
-
 JSON_OUTPUT=0
 BEGIN_DATE=""
 END_DATE=""
@@ -55,7 +48,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         -b | --begin-date)
-            [ "$#" -ge 2 ] || die "missing value for --begin-date"
+            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --begin-date"
             BEGIN_DATE=$2
             shift 2
             ;;
@@ -64,7 +57,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         -e | --end-date)
-            [ "$#" -ge 2 ] || die "missing value for --end-date"
+            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --end-date"
             END_DATE=$2
             shift 2
             ;;
@@ -73,7 +66,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         -d | --directory)
-            [ "$#" -ge 2 ] || die "missing value for --directory"
+            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --directory"
             DIRECTORY=$2
             shift 2
             ;;
@@ -82,7 +75,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         -a | --author)
-            [ "$#" -ge 2 ] || die "missing value for --author"
+            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --author"
             AUTHOR_NAME=$2
             shift 2
             ;;
@@ -99,7 +92,7 @@ while [ "$#" -gt 0 ]; do
             break
             ;;
         -*)
-            die "unknown option: $1"
+            suss_die "$PROGRAM_NAME" "unknown option: $1"
             ;;
         *)
             POSITIONAL+=("$1")
@@ -121,19 +114,19 @@ if [ -z "$AUTHOR_NAME" ] && [ "${#POSITIONAL[@]}" -ge 4 ]; then
     AUTHOR_NAME=${POSITIONAL[3]}
 fi
 
-[ -n "$BEGIN_DATE" ] || die "begin date is required"
-[ -n "$END_DATE" ] || die "end date is required"
-[ -d "$DIRECTORY" ] || die "directory does not exist: $DIRECTORY"
+[ -n "$BEGIN_DATE" ] || suss_die "$PROGRAM_NAME" "begin date is required"
+[ -n "$END_DATE" ] || suss_die "$PROGRAM_NAME" "end date is required"
+[ -d "$DIRECTORY" ] || suss_die "$PROGRAM_NAME" "directory does not exist: $DIRECTORY"
 
 if ! git -C "$DIRECTORY" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    die "not a git repository: $DIRECTORY"
+    suss_die "$PROGRAM_NAME" "not a git repository: $DIRECTORY"
 fi
 
 if [ -z "$AUTHOR_NAME" ]; then
     AUTHOR_NAME=$(git -C "$DIRECTORY" config --get user.name || true)
 fi
 
-[ -n "$AUTHOR_NAME" ] || die "author name is required and could not be inferred from git config"
+[ -n "$AUTHOR_NAME" ] || suss_die "$PROGRAM_NAME" "author name is required and could not be inferred from git config"
 
 stats=$(
     git -C "$DIRECTORY" log --author="$AUTHOR_NAME" \
@@ -155,10 +148,10 @@ total_lines=$(printf '%s' "$stats" | awk -F '\t' '{print $3}')
 if [ "$JSON_OUTPUT" -eq 1 ]; then
     printf '{\n'
     printf '  "ok": true,\n'
-    printf '  "begin_date": "%s",\n' "$(json_escape "$BEGIN_DATE")"
-    printf '  "end_date": "%s",\n' "$(json_escape "$END_DATE")"
-    printf '  "directory": "%s",\n' "$(json_escape "$DIRECTORY")"
-    printf '  "author_name": "%s",\n' "$(json_escape "$AUTHOR_NAME")"
+    printf '  "begin_date": "%s",\n' "$(suss_json_escape "$BEGIN_DATE")"
+    printf '  "end_date": "%s",\n' "$(suss_json_escape "$END_DATE")"
+    printf '  "directory": "%s",\n' "$(suss_json_escape "$DIRECTORY")"
+    printf '  "author_name": "%s",\n' "$(suss_json_escape "$AUTHOR_NAME")"
     printf '  "added_lines": %s,\n' "$added_lines"
     printf '  "removed_lines": %s,\n' "$removed_lines"
     printf '  "total_lines": %s\n' "$total_lines"

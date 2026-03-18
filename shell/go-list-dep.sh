@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib/common-cli.sh
+source "$SCRIPT_DIR/lib/common-cli.sh"
+
 PROGRAM_NAME=$(basename "$0")
 DEFAULT_TEST_IMPORT_DEPTH=${TESTIMPORTS:-1}
 
@@ -26,32 +30,13 @@ Examples:
 EOF
 }
 
-die() {
-    echo "[$PROGRAM_NAME] $*" >&2
-    exit 1
-}
-
-is_integer() {
-    case "$1" in
-        '' | -) return 1 ;;
-        -[0-9]* | [0-9]*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-json_escape() {
-    printf '%s' "$1" | sed \
-        -e 's/\\/\\\\/g' \
-        -e 's/"/\\"/g'
-}
-
 json_array_from_args() {
     local first=1
     local item escaped
 
     printf '['
     for item in "$@"; do
-        escaped=$(json_escape "$item")
+        escaped=$(suss_json_escape "$item")
         if [ $first -eq 0 ]; then
             printf ','
         fi
@@ -69,7 +54,7 @@ json_array_from_file() {
     printf '['
     while IFS= read -r item; do
         [ -n "$item" ] || continue
-        escaped=$(json_escape "$item")
+        escaped=$(suss_json_escape "$item")
         if [ $first -eq 0 ]; then
             printf ','
         fi
@@ -155,7 +140,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --test-import-depth)
-            [ "$#" -ge 2 ] || die "missing value for --test-import-depth"
+            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --test-import-depth"
             TEST_IMPORT_DEPTH=$2
             shift 2
             ;;
@@ -172,7 +157,7 @@ while [ "$#" -gt 0 ]; do
             break
             ;;
         -*)
-            die "unknown option: $1"
+            suss_die "$PROGRAM_NAME" "unknown option: $1"
             ;;
         *)
             PACKAGES+=("$1")
@@ -181,15 +166,15 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-if ! is_integer "$TEST_IMPORT_DEPTH"; then
-    die "--test-import-depth must be an integer"
+if ! suss_is_integer "$TEST_IMPORT_DEPTH"; then
+    suss_die "$PROGRAM_NAME" "--test-import-depth must be an integer"
 fi
 
 if [ "${#PACKAGES[@]}" -eq 0 ]; then
     PACKAGES=(.)
 fi
 
-command -v go >/dev/null 2>&1 || die "go command not found"
+suss_require_command "go" "$PROGRAM_NAME"
 
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/go-list-dep.XXXXXX")
 trap 'rm -rf "$TMP_DIR"' EXIT
