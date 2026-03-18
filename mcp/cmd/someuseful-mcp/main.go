@@ -272,8 +272,6 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 		}
 	}
 
-	s.initialized = true
-
 	result := map[string]interface{}{
 		"protocolVersion": negotiateProtocolVersion(params.ProtocolVersion),
 		"capabilities": map[string]interface{}{
