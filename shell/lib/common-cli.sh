@@ -27,7 +27,13 @@ suss_is_integer() {
 }
 
 suss_json_escape() {
-    printf '%s' "$1" | sed \
-        -e 's/\\/\\\\/g' \
-        -e 's/"/\\"/g'
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\t'/\\t}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\b'/\\b}"
+    s="${s//$'\f'/\\f}"
+    printf '%s' "$s"
 }
