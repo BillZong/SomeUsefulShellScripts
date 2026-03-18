@@ -1,3 +1,17 @@
 .DS_Store
 .Trash
 node_modules/
+
+# MCP build artifacts
+mcp/cmd/someuseful-mcp/someuseful-mcp
+mcp/cmd/someuseful-mcp/__debug_bin*
+
+# IDE
+.codex/
+.cursor/
+.idea/
+.gemini/
+.opencode/
+.trae/
+.vscode/
+
