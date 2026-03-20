@@ -98,3 +98,68 @@ func TestNegotiateProtocolVersion(t *testing.T) {
 		t.Fatalf("expected fallback to latest protocol version, got %s", got)
 	}
 }
+
+func TestParseDockerShowImagesArchOptionsDefaults(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(nil)
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+	if len(options.Images) != 0 {
+		t.Fatalf("expected empty default images, got %#v", options.Images)
+	}
+}
+
+func TestParseGitStatusSubdirOptionsDefaults(t *testing.T) {
+	options, err := parseGitStatusSubdirOptions(nil)
+	if err != nil {
+		t.Fatalf("parseGitStatusSubdirOptions returned error: %v", err)
+	}
+	if options.Directory != "." {
+		t.Fatalf("unexpected default directory: %s", options.Directory)
+	}
+	if options.Depth != 2 {
+		t.Fatalf("unexpected default depth: %d", options.Depth)
+	}
+}
+
+func TestParseGitStatusSubdirOptionsAliases(t *testing.T) {
+	options, err := parseGitStatusSubdirOptions(map[string]interface{}{
+		"directory":         "/tmp/workspace",
+		"depth":             float64(3),
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseGitStatusSubdirOptions returned error: %v", err)
+	}
+	if options.Directory != "/tmp/workspace" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.Depth != 3 {
+		t.Fatalf("unexpected depth: %d", options.Depth)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseWatchProgramMemoryOptionsRequired(t *testing.T) {
+	if _, err := parseWatchProgramMemoryOptions(nil); err == nil {
+		t.Fatalf("expected missing program to fail")
+	}
+}
+
+func TestParseWatchProgramMemoryOptionsAliases(t *testing.T) {
+	options, err := parseWatchProgramMemoryOptions(map[string]interface{}{
+		"program":           "claude",
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseWatchProgramMemoryOptions returned error: %v", err)
+	}
+	if options.Program != "claude" {
+		t.Fatalf("unexpected program: %s", options.Program)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}

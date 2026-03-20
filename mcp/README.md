@@ -2,10 +2,13 @@
 
 这是当前仓库的最小 MCP 骨架，目标是先把低风险、结构化、可组合的能力挂出来，再逐步扩展更多工具。
 
-当前暴露两个 tool：
+当前暴露五个 tool：
 
 - `go_list_dep`
 - `git_count_line`
+- `docker_show_images_arch`
+- `git_status_subdir`
+- `watch_program_memory`
 
 ## 特点
 
@@ -110,6 +113,12 @@ openclaw agent \
   - 显式指定 `go-list-dep` 脚本路径。
 - `SUSS_GIT_COUNT_LINE_SCRIPT`
   - 显式指定 `git-count-line.sh` 脚本路径。
+- `SUSS_DOCKER_SHOW_IMAGES_ARCH_SCRIPT`
+  - 显式指定 `docker-show-images-arch.sh` 脚本路径。
+- `SUSS_GIT_STATUS_SUBDIR_SCRIPT`
+  - 显式指定 `git-status-subdir.sh` 脚本路径。
+- `SUSS_WATCH_PROGRAM_MEMORY_SCRIPT`
+  - 显式指定 `watch-prog-memory.sh` 脚本路径。
 
 如果两者都不传，服务会优先尝试：
 
@@ -162,6 +171,73 @@ openclaw agent \
 - `addedLines`
 - `removedLines`
 - `totalLines`
+
+## Tool: `docker_show_images_arch`
+
+输入参数：
+
+- `images`
+  - `string[]`，可选，默认扫描本机全部本地镜像
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `images[].id`
+- `images[].repoTags`
+- `images[].architecture`
+- `images[].os`
+- `images[].variant`
+
+## Tool: `git_status_subdir`
+
+输入参数：
+
+- `directory`
+  - `string`，可选，默认 `"."`
+- `depth`
+  - `integer`，可选，默认 `2`
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `directory`
+- `depth`
+- `repositories[].path`
+- `repositories[].relativePath`
+- `repositories[].branch`
+- `repositories[].upstream`
+- `repositories[].ahead`
+- `repositories[].behind`
+- `repositories[].stagedCount`
+- `repositories[].unstagedCount`
+- `repositories[].untrackedCount`
+- `repositories[].conflictedCount`
+- `repositories[].clean`
+
+## Tool: `watch_program_memory`
+
+输入参数：
+
+- `program`
+  - `string`，必填，进程名或命令行匹配片段
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `timestamp`
+- `program`
+- `matchCount`
+- `totalRssKb`
+- `processes[].pid`
+- `processes[].rssKb`
+- `processes[].command`
+- `processes[].args`
 
 ## 设计取舍
 

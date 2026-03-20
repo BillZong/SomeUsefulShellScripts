@@ -75,6 +75,22 @@ type gitCountLineOptions struct {
 	WorkingDirectory string
 }
 
+type dockerShowImagesArchOptions struct {
+	Images           []string
+	WorkingDirectory string
+}
+
+type gitStatusSubdirOptions struct {
+	Directory        string
+	Depth            int
+	WorkingDirectory string
+}
+
+type watchProgramMemoryOptions struct {
+	Program          string
+	WorkingDirectory string
+}
+
 type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
@@ -111,6 +127,106 @@ type gitCountLineStructuredResult struct {
 	AddedLines   int    `json:"addedLines"`
 	RemovedLines int    `json:"removedLines"`
 	TotalLines   int    `json:"totalLines"`
+}
+
+type dockerShowImagesArchScriptImage struct {
+	ID           string   `json:"id"`
+	RepoTags     []string `json:"repo_tags"`
+	Architecture string   `json:"architecture"`
+	OS           string   `json:"os"`
+	Variant      string   `json:"variant"`
+}
+
+type dockerShowImagesArchScriptResult struct {
+	OK     bool                              `json:"ok"`
+	Images []dockerShowImagesArchScriptImage `json:"images"`
+}
+
+type dockerShowImagesArchStructuredImage struct {
+	ID           string   `json:"id"`
+	RepoTags     []string `json:"repoTags"`
+	Architecture string   `json:"architecture"`
+	OS           string   `json:"os"`
+	Variant      string   `json:"variant"`
+}
+
+type dockerShowImagesArchStructuredResult struct {
+	OK     bool                                  `json:"ok"`
+	Images []dockerShowImagesArchStructuredImage `json:"images"`
+}
+
+type gitStatusSubdirScriptRepository struct {
+	Path            string `json:"path"`
+	RelativePath    string `json:"relative_path"`
+	Branch          string `json:"branch"`
+	Upstream        string `json:"upstream"`
+	Ahead           int    `json:"ahead"`
+	Behind          int    `json:"behind"`
+	StagedCount     int    `json:"staged_count"`
+	UnstagedCount   int    `json:"unstaged_count"`
+	UntrackedCount  int    `json:"untracked_count"`
+	ConflictedCount int    `json:"conflicted_count"`
+	Clean           bool   `json:"clean"`
+}
+
+type gitStatusSubdirScriptResult struct {
+	OK           bool                              `json:"ok"`
+	Directory    string                            `json:"directory"`
+	Depth        int                               `json:"depth"`
+	Repositories []gitStatusSubdirScriptRepository `json:"repositories"`
+}
+
+type gitStatusSubdirStructuredRepository struct {
+	Path            string `json:"path"`
+	RelativePath    string `json:"relativePath"`
+	Branch          string `json:"branch"`
+	Upstream        string `json:"upstream"`
+	Ahead           int    `json:"ahead"`
+	Behind          int    `json:"behind"`
+	StagedCount     int    `json:"stagedCount"`
+	UnstagedCount   int    `json:"unstagedCount"`
+	UntrackedCount  int    `json:"untrackedCount"`
+	ConflictedCount int    `json:"conflictedCount"`
+	Clean           bool   `json:"clean"`
+}
+
+type gitStatusSubdirStructuredResult struct {
+	OK           bool                                  `json:"ok"`
+	Directory    string                                `json:"directory"`
+	Depth        int                                   `json:"depth"`
+	Repositories []gitStatusSubdirStructuredRepository `json:"repositories"`
+}
+
+type watchProgramMemoryScriptProcess struct {
+	PID     int    `json:"pid"`
+	RSSKB   int    `json:"rss_kb"`
+	Command string `json:"command"`
+	Args    string `json:"args"`
+}
+
+type watchProgramMemoryScriptResult struct {
+	OK         bool                              `json:"ok"`
+	Timestamp  string                            `json:"timestamp"`
+	Program    string                            `json:"program"`
+	MatchCount int                               `json:"match_count"`
+	TotalRSSKB int                               `json:"total_rss_kb"`
+	Processes  []watchProgramMemoryScriptProcess `json:"processes"`
+}
+
+type watchProgramMemoryStructuredProcess struct {
+	PID     int    `json:"pid"`
+	RSSKB   int    `json:"rssKb"`
+	Command string `json:"command"`
+	Args    string `json:"args"`
+}
+
+type watchProgramMemoryStructuredResult struct {
+	OK         bool                                  `json:"ok"`
+	Timestamp  string                                `json:"timestamp"`
+	Program    string                                `json:"program"`
+	MatchCount int                                   `json:"matchCount"`
+	TotalRSSKB int                                   `json:"totalRssKb"`
+	Processes  []watchProgramMemoryStructuredProcess `json:"processes"`
 }
 
 type server struct {
@@ -285,7 +401,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools go_list_dep and git_count_line for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools for dependency inspection, git analytics, docker image metadata, multi-repo status scans, and process memory snapshots. High-risk shell utilities are intentionally not exposed.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -410,6 +526,164 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 				"openWorldHint":   false,
 			},
 		},
+		map[string]interface{}{
+			"name":        "docker_show_images_arch",
+			"title":       "Show Docker Image Architectures",
+			"description": "Run the repository's docker-show-images-arch CLI and return image architecture details as structured data.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"images": map[string]interface{}{
+						"type":        "array",
+						"description": "Optional image references to inspect. Defaults to all local images.",
+						"items":       map[string]interface{}{"type": "string"},
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{"type": "boolean"},
+					"images": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"id":           map[string]interface{}{"type": "string"},
+								"repoTags":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+								"architecture": map[string]interface{}{"type": "string"},
+								"os":           map[string]interface{}{"type": "string"},
+								"variant":      map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"id", "repoTags", "architecture", "os", "variant"},
+						},
+					},
+				},
+				"required": []string{"ok", "images"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Docker image architectures",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
+		map[string]interface{}{
+			"name":        "git_status_subdir",
+			"title":       "Scan Git Repositories Under a Directory",
+			"description": "Run the repository's git-status-subdir CLI and summarize branch and working tree state for nested repositories.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Root directory to scan. Defaults to the current directory.",
+					},
+					"depth": map[string]interface{}{
+						"type":        "integer",
+						"description": "Max directory depth to scan for nested repositories. Defaults to 2.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":        map[string]interface{}{"type": "boolean"},
+					"directory": map[string]interface{}{"type": "string"},
+					"depth":     map[string]interface{}{"type": "integer"},
+					"repositories": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"path":            map[string]interface{}{"type": "string"},
+								"relativePath":    map[string]interface{}{"type": "string"},
+								"branch":          map[string]interface{}{"type": "string"},
+								"upstream":        map[string]interface{}{"type": "string"},
+								"ahead":           map[string]interface{}{"type": "integer"},
+								"behind":          map[string]interface{}{"type": "integer"},
+								"stagedCount":     map[string]interface{}{"type": "integer"},
+								"unstagedCount":   map[string]interface{}{"type": "integer"},
+								"untrackedCount":  map[string]interface{}{"type": "integer"},
+								"conflictedCount": map[string]interface{}{"type": "integer"},
+								"clean":           map[string]interface{}{"type": "boolean"},
+							},
+							"required": []string{"path", "relativePath", "branch", "upstream", "ahead", "behind", "stagedCount", "unstagedCount", "untrackedCount", "conflictedCount", "clean"},
+						},
+					},
+				},
+				"required": []string{"ok", "directory", "depth", "repositories"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Git repo status scan",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
+		map[string]interface{}{
+			"name":        "watch_program_memory",
+			"title":       "Sample Program Memory",
+			"description": "Run the repository's watch-prog-memory CLI and return RSS memory totals for matching processes.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"program": map[string]interface{}{
+						"type":        "string",
+						"description": "Program name or substring pattern to match.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+				"required": []string{"program"},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":         map[string]interface{}{"type": "boolean"},
+					"timestamp":  map[string]interface{}{"type": "string"},
+					"program":    map[string]interface{}{"type": "string"},
+					"matchCount": map[string]interface{}{"type": "integer"},
+					"totalRssKb": map[string]interface{}{"type": "integer"},
+					"processes": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"pid":     map[string]interface{}{"type": "integer"},
+								"rssKb":   map[string]interface{}{"type": "integer"},
+								"command": map[string]interface{}{"type": "string"},
+								"args":    map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"pid", "rssKb", "command", "args"},
+						},
+					},
+				},
+				"required": []string{"ok", "timestamp", "program", "matchCount", "totalRssKb", "processes"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Program memory sample",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   true,
+			},
+		},
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -510,6 +784,105 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 						"text": string(pretty),
 					},
 				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "docker_show_images_arch":
+		result, err := runDockerShowImagesArch(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{"type": "text", "text": err.Error()},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content":           []interface{}{map[string]interface{}{"type": "text", "text": string(pretty)}},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "git_status_subdir":
+		result, err := runGitStatusSubdir(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{"type": "text", "text": err.Error()},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content":           []interface{}{map[string]interface{}{"type": "text", "text": string(pretty)}},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "watch_program_memory":
+		result, err := runWatchProgramMemory(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{"type": "text", "text": err.Error()},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content":           []interface{}{map[string]interface{}{"type": "text", "text": string(pretty)}},
 				"structuredContent": result,
 				"isError":           false,
 			},
@@ -735,6 +1108,266 @@ func parseGitCountLineOptions(arguments map[string]interface{}) (gitCountLineOpt
 		return options, fmt.Errorf("endDate is required")
 	}
 
+	return options, nil
+}
+
+func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImagesArchStructuredResult, error) {
+	options, err := parseDockerShowImagesArchOptions(arguments)
+	if err != nil {
+		return dockerShowImagesArchStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_DOCKER_SHOW_IMAGES_ARCH_SCRIPT", "docker-show-images-arch.sh")
+	if err != nil {
+		return dockerShowImagesArchStructuredResult{}, err
+	}
+
+	args := []string{scriptPath, "--json"}
+	args = append(args, options.Images...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return dockerShowImagesArchStructuredResult{}, fmt.Errorf("docker_show_images_arch failed: %s", stderrText)
+		}
+		return dockerShowImagesArchStructuredResult{}, fmt.Errorf("docker_show_images_arch execution failed: %w", err)
+	}
+
+	var parsed dockerShowImagesArchScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return dockerShowImagesArchStructuredResult{}, fmt.Errorf("invalid JSON from docker-show-images-arch script: %w", err)
+	}
+
+	images := make([]dockerShowImagesArchStructuredImage, 0, len(parsed.Images))
+	for _, image := range parsed.Images {
+		images = append(images, dockerShowImagesArchStructuredImage{
+			ID:           image.ID,
+			RepoTags:     image.RepoTags,
+			Architecture: image.Architecture,
+			OS:           image.OS,
+			Variant:      image.Variant,
+		})
+	}
+
+	return dockerShowImagesArchStructuredResult{
+		OK:     parsed.OK,
+		Images: images,
+	}, nil
+}
+
+func parseDockerShowImagesArchOptions(arguments map[string]interface{}) (dockerShowImagesArchOptions, error) {
+	options := dockerShowImagesArchOptions{}
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := arguments["images"]; ok {
+		images, err := toStringSlice(value)
+		if err != nil {
+			return options, fmt.Errorf("images must be a string or array of strings")
+		}
+		options.Images = images
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+	return options, nil
+}
+
+func runGitStatusSubdir(arguments map[string]interface{}) (gitStatusSubdirStructuredResult, error) {
+	options, err := parseGitStatusSubdirOptions(arguments)
+	if err != nil {
+		return gitStatusSubdirStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_STATUS_SUBDIR_SCRIPT", "git-status-subdir.sh")
+	if err != nil {
+		return gitStatusSubdirStructuredResult{}, err
+	}
+
+	args := []string{scriptPath, "--json", "--directory", options.Directory, "--depth", strconv.Itoa(options.Depth)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdir failed: %s", stderrText)
+		}
+		return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdir execution failed: %w", err)
+	}
+
+	var parsed gitStatusSubdirScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitStatusSubdirStructuredResult{}, fmt.Errorf("invalid JSON from git-status-subdir script: %w", err)
+	}
+
+	repositories := make([]gitStatusSubdirStructuredRepository, 0, len(parsed.Repositories))
+	for _, repo := range parsed.Repositories {
+		repositories = append(repositories, gitStatusSubdirStructuredRepository{
+			Path:            repo.Path,
+			RelativePath:    repo.RelativePath,
+			Branch:          repo.Branch,
+			Upstream:        repo.Upstream,
+			Ahead:           repo.Ahead,
+			Behind:          repo.Behind,
+			StagedCount:     repo.StagedCount,
+			UnstagedCount:   repo.UnstagedCount,
+			UntrackedCount:  repo.UntrackedCount,
+			ConflictedCount: repo.ConflictedCount,
+			Clean:           repo.Clean,
+		})
+	}
+
+	return gitStatusSubdirStructuredResult{
+		OK:           parsed.OK,
+		Directory:    parsed.Directory,
+		Depth:        parsed.Depth,
+		Repositories: repositories,
+	}, nil
+}
+
+func parseGitStatusSubdirOptions(arguments map[string]interface{}) (gitStatusSubdirOptions, error) {
+	options := gitStatusSubdirOptions{
+		Directory: ".",
+		Depth:     2,
+	}
+	if len(arguments) == 0 {
+		return options, nil
+	}
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "depth"); ok {
+		intValue, err := toInt(value)
+		if err != nil || intValue < 0 {
+			return options, fmt.Errorf("depth must be a non-negative integer")
+		}
+		options.Depth = intValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+	return options, nil
+}
+
+func runWatchProgramMemory(arguments map[string]interface{}) (watchProgramMemoryStructuredResult, error) {
+	options, err := parseWatchProgramMemoryOptions(arguments)
+	if err != nil {
+		return watchProgramMemoryStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_WATCH_PROGRAM_MEMORY_SCRIPT", "watch-prog-memory.sh")
+	if err != nil {
+		return watchProgramMemoryStructuredResult{}, err
+	}
+
+	args := []string{scriptPath, "--json", "--program", options.Program}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return watchProgramMemoryStructuredResult{}, fmt.Errorf("watch_program_memory failed: %s", stderrText)
+		}
+		return watchProgramMemoryStructuredResult{}, fmt.Errorf("watch_program_memory execution failed: %w", err)
+	}
+
+	var parsed watchProgramMemoryScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return watchProgramMemoryStructuredResult{}, fmt.Errorf("invalid JSON from watch-prog-memory script: %w", err)
+	}
+
+	processes := make([]watchProgramMemoryStructuredProcess, 0, len(parsed.Processes))
+	for _, process := range parsed.Processes {
+		processes = append(processes, watchProgramMemoryStructuredProcess{
+			PID:     process.PID,
+			RSSKB:   process.RSSKB,
+			Command: process.Command,
+			Args:    process.Args,
+		})
+	}
+
+	return watchProgramMemoryStructuredResult{
+		OK:         parsed.OK,
+		Timestamp:  parsed.Timestamp,
+		Program:    parsed.Program,
+		MatchCount: parsed.MatchCount,
+		TotalRSSKB: parsed.TotalRSSKB,
+		Processes:  processes,
+	}, nil
+}
+
+func parseWatchProgramMemoryOptions(arguments map[string]interface{}) (watchProgramMemoryOptions, error) {
+	options := watchProgramMemoryOptions{}
+	if len(arguments) == 0 {
+		return options, fmt.Errorf("program is required")
+	}
+	if value, ok := firstValue(arguments, "program"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("program must be a non-empty string")
+		}
+		options.Program = stringValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+	if options.Program == "" {
+		return options, fmt.Errorf("program is required")
+	}
 	return options, nil
 }
 
