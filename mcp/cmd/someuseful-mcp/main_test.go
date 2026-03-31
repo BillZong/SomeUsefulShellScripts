@@ -200,6 +200,61 @@ func TestHandleToolsListIncludesGitStatusSubdirs(t *testing.T) {
 	t.Fatalf("git_status_subdirs not found in tools/list response")
 }
 
+func TestParseDockerShowImagesArchOptionsDefaults(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(nil)
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseDockerShowImagesArchOptionsAliases(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(map[string]interface{}{
+		"working_directory": "/tmp/docker",
+	})
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+
+	if options.WorkingDirectory != "/tmp/docker" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesDockerShowImagesArch(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "docker_show_images_arch" {
+			return
+		}
+	}
+
+	t.Fatalf("docker_show_images_arch not found in tools/list response")
+}
+
 func TestNegotiateProtocolVersion(t *testing.T) {
 	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
 		t.Fatalf("expected requested supported protocol version, got %s", got)
