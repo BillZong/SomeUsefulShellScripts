@@ -87,6 +87,10 @@ type gitStatusSubdirsOptions struct {
 	WorkingDirectory string
 }
 
+type dockerShowImagesArchOptions struct {
+	WorkingDirectory string
+}
+
 type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
@@ -185,6 +189,28 @@ type gitStatusSubdirsStructuredResult struct {
 	Directory    string                                 `json:"directory"`
 	Depth        int                                    `json:"depth"`
 	Repositories []gitStatusSubdirsStructuredRepository `json:"repositories"`
+}
+
+type dockerShowImagesArchScriptImage struct {
+	ID           string   `json:"id"`
+	RepoTags     []string `json:"repoTags"`
+	Architecture string   `json:"architecture"`
+}
+
+type dockerShowImagesArchScriptResult struct {
+	OK     bool                              `json:"ok"`
+	Images []dockerShowImagesArchScriptImage `json:"images"`
+}
+
+type dockerShowImagesArchStructuredImage struct {
+	ID           string   `json:"id"`
+	RepoTags     []string `json:"repoTags"`
+	Architecture string   `json:"architecture"`
+}
+
+type dockerShowImagesArchStructuredResult struct {
+	OK     bool                                  `json:"ok"`
+	Images []dockerShowImagesArchStructuredImage `json:"images"`
 }
 
 type server struct {
@@ -359,7 +385,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, and git_status_subdirs for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, and docker_show_images_arch for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -591,6 +617,47 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 				"openWorldHint":   false,
 			},
 		},
+		map[string]interface{}{
+			"name":        "docker_show_images_arch",
+			"title":       "Inspect Docker Image Architectures",
+			"description": "Run the repository's docker-show-images-arch CLI and return local image tags and architecture.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{"type": "boolean"},
+					"images": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"id":           map[string]interface{}{"type": "string"},
+								"repoTags":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+								"architecture": map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"id", "repoTags", "architecture"},
+						},
+					},
+				},
+				"required": []string{"ok", "images"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Docker image arch",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -738,6 +805,47 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 		})
 	case "git_status_subdirs":
 		result, err := runGitStatusSubdirs(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "docker_show_images_arch":
+		result, err := runDockerShowImagesArch(params.Arguments)
 		if err != nil {
 			return marshalResponse(responseEnvelope{
 				JSONRPC: "2.0",
@@ -1187,6 +1295,81 @@ func parseGitStatusSubdirsOptions(arguments map[string]interface{}) (gitStatusSu
 		}
 		options.Depth = intValue
 	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
+func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImagesArchStructuredResult, error) {
+	options, err := parseDockerShowImagesArchOptions(arguments)
+	if err != nil {
+		return dockerShowImagesArchStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_DOCKER_SHOW_IMAGES_ARCH_SCRIPT", "docker-show-images-arch.sh")
+	if err != nil {
+		return dockerShowImagesArchStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return dockerShowImagesArchStructuredResult{}, fmt.Errorf("docker_show_images_arch failed: %s", stderrText)
+		}
+		return dockerShowImagesArchStructuredResult{}, fmt.Errorf("docker_show_images_arch execution failed: %w", err)
+	}
+
+	var parsed dockerShowImagesArchScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return dockerShowImagesArchStructuredResult{}, fmt.Errorf("invalid JSON from docker-show-images-arch script: %w", err)
+	}
+
+	images := make([]dockerShowImagesArchStructuredImage, 0, len(parsed.Images))
+	for _, image := range parsed.Images {
+		images = append(images, dockerShowImagesArchStructuredImage{
+			ID:           image.ID,
+			RepoTags:     image.RepoTags,
+			Architecture: image.Architecture,
+		})
+	}
+
+	return dockerShowImagesArchStructuredResult{
+		OK:     parsed.OK,
+		Images: images,
+	}, nil
+}
+
+func parseDockerShowImagesArchOptions(arguments map[string]interface{}) (dockerShowImagesArchOptions, error) {
+	options := dockerShowImagesArchOptions{}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
 	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
 		stringValue, ok := value.(string)
 		if !ok {
