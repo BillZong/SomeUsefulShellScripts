@@ -81,6 +81,12 @@ type gitFindLargeFilesOptions struct {
 	WorkingDirectory string
 }
 
+type gitStatusSubdirsOptions struct {
+	Directory        string
+	Depth            int
+	WorkingDirectory string
+}
+
 type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
@@ -151,6 +157,34 @@ type gitFindLargeFilesStructuredResult struct {
 	ReturnedCount int                               `json:"returnedCount"`
 	Truncated     bool                              `json:"truncated"`
 	Files         []gitFindLargeFilesStructuredFile `json:"files"`
+}
+
+type gitStatusSubdirsScriptRepository struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
+}
+
+type gitStatusSubdirsScriptResult struct {
+	OK           bool                               `json:"ok"`
+	Directory    string                             `json:"directory"`
+	Depth        int                                `json:"depth"`
+	Repositories []gitStatusSubdirsScriptRepository `json:"repositories"`
+}
+
+type gitStatusSubdirsStructuredRepository struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
+}
+
+type gitStatusSubdirsStructuredResult struct {
+	OK           bool                                   `json:"ok"`
+	Directory    string                                 `json:"directory"`
+	Depth        int                                    `json:"depth"`
+	Repositories []gitStatusSubdirsStructuredRepository `json:"repositories"`
 }
 
 type server struct {
@@ -325,7 +359,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, and git_find_large_files for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, and git_status_subdirs for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -505,6 +539,58 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 				"openWorldHint":   false,
 			},
 		},
+		map[string]interface{}{
+			"name":        "git_status_subdirs",
+			"title":       "Inspect Git Repositories Under a Directory",
+			"description": "Run the repository's git-status-subdir CLI and return child repository branches and porcelain status.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Root directory to scan. Defaults to the current directory.",
+					},
+					"depth": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum directory depth to scan for child repositories. Defaults to 2.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":        map[string]interface{}{"type": "boolean"},
+					"directory": map[string]interface{}{"type": "string"},
+					"depth":     map[string]interface{}{"type": "integer"},
+					"repositories": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"path":      map[string]interface{}{"type": "string"},
+								"branch":    map[string]interface{}{"type": "string"},
+								"isClean":   map[string]interface{}{"type": "boolean"},
+								"porcelain": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+							},
+							"required": []string{"path", "branch", "isClean", "porcelain"},
+						},
+					},
+				},
+				"required": []string{"ok", "directory", "depth", "repositories"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Git subdir status",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -611,6 +697,47 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 		})
 	case "git_find_large_files":
 		result, err := runGitFindLargeFiles(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "git_status_subdirs":
+		result, err := runGitStatusSubdirs(params.Arguments)
 		if err != nil {
 			return marshalResponse(responseEnvelope{
 				JSONRPC: "2.0",
@@ -962,6 +1089,103 @@ func parseGitFindLargeFilesOptions(arguments map[string]interface{}) (gitFindLar
 			return options, fmt.Errorf("limit must be a non-negative integer")
 		}
 		options.Limit = intValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
+func runGitStatusSubdirs(arguments map[string]interface{}) (gitStatusSubdirsStructuredResult, error) {
+	options, err := parseGitStatusSubdirsOptions(arguments)
+	if err != nil {
+		return gitStatusSubdirsStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_STATUS_SUBDIR_SCRIPT", "git-status-subdir.sh")
+	if err != nil {
+		return gitStatusSubdirsStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--directory", options.Directory,
+		"--depth", strconv.Itoa(options.Depth),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitStatusSubdirsStructuredResult{}, fmt.Errorf("git_status_subdirs failed: %s", stderrText)
+		}
+		return gitStatusSubdirsStructuredResult{}, fmt.Errorf("git_status_subdirs execution failed: %w", err)
+	}
+
+	var parsed gitStatusSubdirsScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitStatusSubdirsStructuredResult{}, fmt.Errorf("invalid JSON from git-status-subdir script: %w", err)
+	}
+
+	repositories := make([]gitStatusSubdirsStructuredRepository, 0, len(parsed.Repositories))
+	for _, repository := range parsed.Repositories {
+		repositories = append(repositories, gitStatusSubdirsStructuredRepository{
+			Path:      repository.Path,
+			Branch:    repository.Branch,
+			IsClean:   repository.IsClean,
+			Porcelain: repository.Porcelain,
+		})
+	}
+
+	return gitStatusSubdirsStructuredResult{
+		OK:           parsed.OK,
+		Directory:    parsed.Directory,
+		Depth:        parsed.Depth,
+		Repositories: repositories,
+	}, nil
+}
+
+func parseGitStatusSubdirsOptions(arguments map[string]interface{}) (gitStatusSubdirsOptions, error) {
+	options := gitStatusSubdirsOptions{
+		Directory: ".",
+		Depth:     2,
+	}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "depth"); ok {
+		intValue, err := toInt(value)
+		if err != nil || intValue < 0 {
+			return options, fmt.Errorf("depth must be a non-negative integer")
+		}
+		options.Depth = intValue
 	}
 	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
 		stringValue, ok := value.(string)
