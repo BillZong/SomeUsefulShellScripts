@@ -2,16 +2,17 @@
 
 这是当前仓库的最小 MCP 骨架，目标是先把低风险、结构化、可组合的能力挂出来，再逐步扩展更多工具。
 
-当前暴露两个 tool：
+当前暴露三个 tool：
 
 - `go_list_dep`
 - `git_count_line`
+- `git_find_large_files`
 
 ## 特点
 
 - 使用 `stdio` 传输，适合本地被 Agent 进程拉起。
 - 不依赖第三方 SDK，便于在当前仓库中快速验证和维护。
-- 当前通过调用 `shell/go-list-dep.sh` 提供能力，后续可以逐步把底层脚本替换成更稳定的实现。
+- 当前通过调用 `shell/` 下的 Bash CLI 提供能力，后续可以逐步把底层脚本替换成更稳定的实现。
 
 ## 运行
 
@@ -110,10 +111,12 @@ openclaw agent \
   - 显式指定 `go-list-dep` 脚本路径。
 - `SUSS_GIT_COUNT_LINE_SCRIPT`
   - 显式指定 `git-count-line.sh` 脚本路径。
+- `SUSS_GIT_FIND_LARGE_FILES_SCRIPT`
+  - 显式指定 `git-find-large-files.sh` 脚本路径。
 
-如果两者都不传，服务会优先尝试：
+如果这些变量都不传，服务会优先尝试：
 
-1. 当前目录所在 git 仓库根目录下的 `shell/go-list-dep.sh`
+1. 当前目录所在 git 仓库根目录下的 `shell/<script>.sh`
 2. 当前工作目录附近的常见相对路径
 
 ## Tool: `go_list_dep`
@@ -162,6 +165,31 @@ openclaw agent \
 - `addedLines`
 - `removedLines`
 - `totalLines`
+
+## Tool: `git_find_large_files`
+
+输入参数：
+
+- `directory`
+  - `string`，可选，默认 `"."`
+- `limit`
+  - `integer`，可选，默认 `0`，表示不限制返回数量
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `directory`
+- `limit`
+- `totalCount`
+- `returnedCount`
+- `truncated`
+- `files`
+  - `objectId`
+  - `path`
+  - `sizeBytes`
+  - `sizeHuman`
 
 ## 设计取舍
 
