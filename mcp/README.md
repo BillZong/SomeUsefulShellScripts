@@ -2,11 +2,12 @@
 
 这是当前仓库的最小 MCP 骨架，目标是先把低风险、结构化、可组合的能力挂出来，再逐步扩展更多工具。
 
-当前暴露三个 tool：
+当前暴露四个 tool：
 
 - `go_list_dep`
 - `git_count_line`
 - `git_find_large_files`
+- `git_status_subdirs`
 
 ## 特点
 
@@ -113,6 +114,8 @@ openclaw agent \
   - 显式指定 `git-count-line.sh` 脚本路径。
 - `SUSS_GIT_FIND_LARGE_FILES_SCRIPT`
   - 显式指定 `git-find-large-files.sh` 脚本路径。
+- `SUSS_GIT_STATUS_SUBDIR_SCRIPT`
+  - 显式指定 `git-status-subdir.sh` 脚本路径。
 
 如果这些变量都不传，服务会优先尝试：
 
@@ -190,6 +193,28 @@ openclaw agent \
   - `path`
   - `sizeBytes`
   - `sizeHuman`
+
+## Tool: `git_status_subdirs`
+
+输入参数：
+
+- `directory`
+  - `string`，可选，默认 `"."`
+- `depth`
+  - `integer`，可选，默认 `2`
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `directory`
+- `depth`
+- `repositories`
+  - `path`
+  - `branch`
+  - `isClean`
+  - `porcelain`
 
 ## 设计取舍
 
