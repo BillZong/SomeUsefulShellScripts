@@ -90,6 +90,44 @@ func TestParseGitCountLineOptionsAliases(t *testing.T) {
 	}
 }
 
+func TestParseGitFindLargeFilesOptionsDefaults(t *testing.T) {
+	options, err := parseGitFindLargeFilesOptions(nil)
+	if err != nil {
+		t.Fatalf("parseGitFindLargeFilesOptions returned error: %v", err)
+	}
+
+	if options.Directory != "." {
+		t.Fatalf("unexpected default directory: %s", options.Directory)
+	}
+	if options.Limit != 0 {
+		t.Fatalf("unexpected default limit: %d", options.Limit)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseGitFindLargeFilesOptionsAliases(t *testing.T) {
+	options, err := parseGitFindLargeFilesOptions(map[string]interface{}{
+		"directory":         "/tmp/repo",
+		"limit":             float64(25),
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseGitFindLargeFilesOptions returned error: %v", err)
+	}
+
+	if options.Directory != "/tmp/repo" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.Limit != 25 {
+		t.Fatalf("unexpected limit: %d", options.Limit)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
 func TestNegotiateProtocolVersion(t *testing.T) {
 	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
 		t.Fatalf("expected requested supported protocol version, got %s", got)
