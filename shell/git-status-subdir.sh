@@ -136,8 +136,9 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 REPO_PATHS_FILE="$TMP_DIR/repositories.txt"
 RESULTS_FILE="$TMP_DIR/results.tsv"
+GIT_MARKER_MAX_DEPTH=$((DEPTH + 1))
 
-find "$DIRECTORY" -mindepth 1 -maxdepth "$DEPTH" -type d -name .git -print \
+find "$DIRECTORY" -mindepth 2 -maxdepth "$GIT_MARKER_MAX_DEPTH" -type d -name .git -print \
     | sed 's#/$##' \
     | sed 's#/.git$##' \
     | LC_ALL=C sort -u > "$REPO_PATHS_FILE"
