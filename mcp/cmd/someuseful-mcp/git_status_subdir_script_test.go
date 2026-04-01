@@ -109,3 +109,35 @@ func TestGitStatusSubdirScriptFindsRepoAtExactDepth(t *testing.T) {
 		t.Fatalf("unexpected repository path: %s", result.Repositories[0].Path)
 	}
 }
+
+func TestGitStatusSubdirScriptFindsWorktreeGitFile(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "root")
+	baseRepoDir := filepath.Join(rootDir, "base")
+	worktreeDir := filepath.Join(rootDir, "wt")
+
+	if err := os.MkdirAll(baseRepoDir, 0o755); err != nil {
+		t.Fatalf("mkdir base repo dir: %v", err)
+	}
+
+	runCommand(t, baseRepoDir, "git", "init")
+	commitFixtureFile(t, baseRepoDir, "file.txt", "base repo\n")
+	runCommand(t, baseRepoDir, "git", "worktree", "add", worktreeDir, "-b", "feature")
+
+	result := runGitStatusSubdirScript(t, rootDir, 1)
+	if len(result.Repositories) != 2 {
+		t.Fatalf("expected two repositories, got %#v", result.Repositories)
+	}
+
+	paths := map[string]bool{}
+	for _, repository := range result.Repositories {
+		paths[repository.Path] = true
+	}
+
+	if !paths[baseRepoDir] {
+		t.Fatalf("base repository missing from result: %#v", result.Repositories)
+	}
+	if !paths[worktreeDir] {
+		t.Fatalf("worktree repository missing from result: %#v", result.Repositories)
+	}
+}
