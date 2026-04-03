@@ -75,6 +75,22 @@ type gitCountLineOptions struct {
 	WorkingDirectory string
 }
 
+type gitFindLargeFilesOptions struct {
+	Directory        string
+	Limit            int
+	WorkingDirectory string
+}
+
+type gitStatusSubdirsOptions struct {
+	Directory        string
+	Depth            int
+	WorkingDirectory string
+}
+
+type dockerShowImagesArchOptions struct {
+	WorkingDirectory string
+}
+
 type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
@@ -111,6 +127,90 @@ type gitCountLineStructuredResult struct {
 	AddedLines   int    `json:"addedLines"`
 	RemovedLines int    `json:"removedLines"`
 	TotalLines   int    `json:"totalLines"`
+}
+
+type gitFindLargeFilesScriptFile struct {
+	ObjectID  string `json:"object_id"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"size_bytes"`
+	SizeHuman string `json:"size_human"`
+}
+
+type gitFindLargeFilesScriptResult struct {
+	OK            bool                          `json:"ok"`
+	Directory     string                        `json:"directory"`
+	Limit         int                           `json:"limit"`
+	TotalCount    int                           `json:"total_count"`
+	ReturnedCount int                           `json:"returned_count"`
+	Truncated     bool                          `json:"truncated"`
+	Files         []gitFindLargeFilesScriptFile `json:"files"`
+}
+
+type gitFindLargeFilesStructuredFile struct {
+	ObjectID  string `json:"objectId"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
+	SizeHuman string `json:"sizeHuman"`
+}
+
+type gitFindLargeFilesStructuredResult struct {
+	OK            bool                              `json:"ok"`
+	Directory     string                            `json:"directory"`
+	Limit         int                               `json:"limit"`
+	TotalCount    int                               `json:"totalCount"`
+	ReturnedCount int                               `json:"returnedCount"`
+	Truncated     bool                              `json:"truncated"`
+	Files         []gitFindLargeFilesStructuredFile `json:"files"`
+}
+
+type gitStatusSubdirsScriptRepository struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
+}
+
+type gitStatusSubdirsScriptResult struct {
+	OK           bool                               `json:"ok"`
+	Directory    string                             `json:"directory"`
+	Depth        int                                `json:"depth"`
+	Repositories []gitStatusSubdirsScriptRepository `json:"repositories"`
+}
+
+type gitStatusSubdirsStructuredRepository struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
+}
+
+type gitStatusSubdirsStructuredResult struct {
+	OK           bool                                   `json:"ok"`
+	Directory    string                                 `json:"directory"`
+	Depth        int                                    `json:"depth"`
+	Repositories []gitStatusSubdirsStructuredRepository `json:"repositories"`
+}
+
+type dockerShowImagesArchScriptImage struct {
+	ID           string   `json:"id"`
+	RepoTags     []string `json:"repoTags"`
+	Architecture string   `json:"architecture"`
+}
+
+type dockerShowImagesArchScriptResult struct {
+	OK     bool                              `json:"ok"`
+	Images []dockerShowImagesArchScriptImage `json:"images"`
+}
+
+type dockerShowImagesArchStructuredImage struct {
+	ID           string   `json:"id"`
+	RepoTags     []string `json:"repoTags"`
+	Architecture string   `json:"architecture"`
+}
+
+type dockerShowImagesArchStructuredResult struct {
+	OK     bool                                  `json:"ok"`
+	Images []dockerShowImagesArchStructuredImage `json:"images"`
 }
 
 type server struct {
@@ -285,7 +385,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools go_list_dep and git_count_line for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, and docker_show_images_arch for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -410,6 +510,154 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 				"openWorldHint":   false,
 			},
 		},
+		map[string]interface{}{
+			"name":        "git_find_large_files",
+			"title":       "Find Large Git Blob Objects",
+			"description": "Run the repository's git-find-large-files CLI and return tracked blob objects ordered by size.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Repository directory to inspect. Defaults to the current directory.",
+					},
+					"limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum number of results to return. Defaults to 0 for no limit.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":            map[string]interface{}{"type": "boolean"},
+					"directory":     map[string]interface{}{"type": "string"},
+					"limit":         map[string]interface{}{"type": "integer"},
+					"totalCount":    map[string]interface{}{"type": "integer"},
+					"returnedCount": map[string]interface{}{"type": "integer"},
+					"truncated":     map[string]interface{}{"type": "boolean"},
+					"files": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"objectId":  map[string]interface{}{"type": "string"},
+								"path":      map[string]interface{}{"type": "string"},
+								"sizeBytes": map[string]interface{}{"type": "integer"},
+								"sizeHuman": map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"objectId", "path", "sizeBytes", "sizeHuman"},
+						},
+					},
+				},
+				"required": []string{"ok", "directory", "limit", "totalCount", "returnedCount", "truncated", "files"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Git large files",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
+		map[string]interface{}{
+			"name":        "git_status_subdirs",
+			"title":       "Inspect Git Repositories Under a Directory",
+			"description": "Run the repository's git-status-subdir CLI and return child repository branches and porcelain status.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Root directory to scan. Defaults to the current directory.",
+					},
+					"depth": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum directory depth to scan for child repositories. Defaults to 2.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":        map[string]interface{}{"type": "boolean"},
+					"directory": map[string]interface{}{"type": "string"},
+					"depth":     map[string]interface{}{"type": "integer"},
+					"repositories": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"path":      map[string]interface{}{"type": "string"},
+								"branch":    map[string]interface{}{"type": "string"},
+								"isClean":   map[string]interface{}{"type": "boolean"},
+								"porcelain": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+							},
+							"required": []string{"path", "branch", "isClean", "porcelain"},
+						},
+					},
+				},
+				"required": []string{"ok", "directory", "depth", "repositories"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Git subdir status",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
+		map[string]interface{}{
+			"name":        "docker_show_images_arch",
+			"title":       "Inspect Docker Image Architectures",
+			"description": "Run the repository's docker-show-images-arch CLI and return local image tags and architecture.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{"type": "boolean"},
+					"images": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"id":           map[string]interface{}{"type": "string"},
+								"repoTags":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+								"architecture": map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"id", "repoTags", "architecture"},
+						},
+					},
+				},
+				"required": []string{"ok", "images"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Docker image arch",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -475,6 +723,129 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 		})
 	case "git_count_line":
 		result, err := runGitCountLine(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "git_find_large_files":
+		result, err := runGitFindLargeFiles(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "git_status_subdirs":
+		result, err := runGitStatusSubdirs(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "docker_show_images_arch":
+		result, err := runDockerShowImagesArch(params.Arguments)
 		if err != nil {
 			return marshalResponse(responseEnvelope{
 				JSONRPC: "2.0",
@@ -733,6 +1104,278 @@ func parseGitCountLineOptions(arguments map[string]interface{}) (gitCountLineOpt
 	}
 	if options.EndDate == "" {
 		return options, fmt.Errorf("endDate is required")
+	}
+
+	return options, nil
+}
+
+func runGitFindLargeFiles(arguments map[string]interface{}) (gitFindLargeFilesStructuredResult, error) {
+	options, err := parseGitFindLargeFilesOptions(arguments)
+	if err != nil {
+		return gitFindLargeFilesStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_FIND_LARGE_FILES_SCRIPT", "git-find-large-files.sh")
+	if err != nil {
+		return gitFindLargeFilesStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--directory", options.Directory,
+		"--limit", strconv.Itoa(options.Limit),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitFindLargeFilesStructuredResult{}, fmt.Errorf("git_find_large_files failed: %s", stderrText)
+		}
+		return gitFindLargeFilesStructuredResult{}, fmt.Errorf("git_find_large_files execution failed: %w", err)
+	}
+
+	var parsed gitFindLargeFilesScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitFindLargeFilesStructuredResult{}, fmt.Errorf("invalid JSON from git-find-large-files script: %w", err)
+	}
+
+	files := make([]gitFindLargeFilesStructuredFile, 0, len(parsed.Files))
+	for _, file := range parsed.Files {
+		files = append(files, gitFindLargeFilesStructuredFile{
+			ObjectID:  file.ObjectID,
+			Path:      file.Path,
+			SizeBytes: file.SizeBytes,
+			SizeHuman: file.SizeHuman,
+		})
+	}
+
+	return gitFindLargeFilesStructuredResult{
+		OK:            parsed.OK,
+		Directory:     parsed.Directory,
+		Limit:         parsed.Limit,
+		TotalCount:    parsed.TotalCount,
+		ReturnedCount: parsed.ReturnedCount,
+		Truncated:     parsed.Truncated,
+		Files:         files,
+	}, nil
+}
+
+func parseGitFindLargeFilesOptions(arguments map[string]interface{}) (gitFindLargeFilesOptions, error) {
+	options := gitFindLargeFilesOptions{
+		Directory: ".",
+		Limit:     0,
+	}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "limit"); ok {
+		intValue, err := toInt(value)
+		if err != nil || intValue < 0 {
+			return options, fmt.Errorf("limit must be a non-negative integer")
+		}
+		options.Limit = intValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
+func runGitStatusSubdirs(arguments map[string]interface{}) (gitStatusSubdirsStructuredResult, error) {
+	options, err := parseGitStatusSubdirsOptions(arguments)
+	if err != nil {
+		return gitStatusSubdirsStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_STATUS_SUBDIR_SCRIPT", "git-status-subdir.sh")
+	if err != nil {
+		return gitStatusSubdirsStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--directory", options.Directory,
+		"--depth", strconv.Itoa(options.Depth),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitStatusSubdirsStructuredResult{}, fmt.Errorf("git_status_subdirs failed: %s", stderrText)
+		}
+		return gitStatusSubdirsStructuredResult{}, fmt.Errorf("git_status_subdirs execution failed: %w", err)
+	}
+
+	var parsed gitStatusSubdirsScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitStatusSubdirsStructuredResult{}, fmt.Errorf("invalid JSON from git-status-subdir script: %w", err)
+	}
+
+	repositories := make([]gitStatusSubdirsStructuredRepository, 0, len(parsed.Repositories))
+	for _, repository := range parsed.Repositories {
+		repositories = append(repositories, gitStatusSubdirsStructuredRepository{
+			Path:      repository.Path,
+			Branch:    repository.Branch,
+			IsClean:   repository.IsClean,
+			Porcelain: repository.Porcelain,
+		})
+	}
+
+	return gitStatusSubdirsStructuredResult{
+		OK:           parsed.OK,
+		Directory:    parsed.Directory,
+		Depth:        parsed.Depth,
+		Repositories: repositories,
+	}, nil
+}
+
+func parseGitStatusSubdirsOptions(arguments map[string]interface{}) (gitStatusSubdirsOptions, error) {
+	options := gitStatusSubdirsOptions{
+		Directory: ".",
+		Depth:     2,
+	}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "depth"); ok {
+		intValue, err := toInt(value)
+		if err != nil || intValue < 0 {
+			return options, fmt.Errorf("depth must be a non-negative integer")
+		}
+		options.Depth = intValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
+func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImagesArchStructuredResult, error) {
+	options, err := parseDockerShowImagesArchOptions(arguments)
+	if err != nil {
+		return dockerShowImagesArchStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_DOCKER_SHOW_IMAGES_ARCH_SCRIPT", "docker-show-images-arch.sh")
+	if err != nil {
+		return dockerShowImagesArchStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return dockerShowImagesArchStructuredResult{}, fmt.Errorf("docker_show_images_arch failed: %s", stderrText)
+		}
+		return dockerShowImagesArchStructuredResult{}, fmt.Errorf("docker_show_images_arch execution failed: %w", err)
+	}
+
+	var parsed dockerShowImagesArchScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return dockerShowImagesArchStructuredResult{}, fmt.Errorf("invalid JSON from docker-show-images-arch script: %w", err)
+	}
+
+	images := make([]dockerShowImagesArchStructuredImage, 0, len(parsed.Images))
+	for _, image := range parsed.Images {
+		images = append(images, dockerShowImagesArchStructuredImage{
+			ID:           image.ID,
+			RepoTags:     image.RepoTags,
+			Architecture: image.Architecture,
+		})
+	}
+
+	return dockerShowImagesArchStructuredResult{
+		OK:     parsed.OK,
+		Images: images,
+	}, nil
+}
+
+func parseDockerShowImagesArchOptions(arguments map[string]interface{}) (dockerShowImagesArchOptions, error) {
+	options := dockerShowImagesArchOptions{}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
 	}
 
 	return options, nil

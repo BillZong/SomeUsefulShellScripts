@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestParseGoListDepOptionsDefaults(t *testing.T) {
 	options, err := parseGoListDepOptions(nil)
@@ -88,6 +91,168 @@ func TestParseGitCountLineOptionsAliases(t *testing.T) {
 	if options.WorkingDirectory != "/tmp" {
 		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
 	}
+}
+
+func TestParseGitFindLargeFilesOptionsDefaults(t *testing.T) {
+	options, err := parseGitFindLargeFilesOptions(nil)
+	if err != nil {
+		t.Fatalf("parseGitFindLargeFilesOptions returned error: %v", err)
+	}
+
+	if options.Directory != "." {
+		t.Fatalf("unexpected default directory: %s", options.Directory)
+	}
+	if options.Limit != 0 {
+		t.Fatalf("unexpected default limit: %d", options.Limit)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseGitFindLargeFilesOptionsAliases(t *testing.T) {
+	options, err := parseGitFindLargeFilesOptions(map[string]interface{}{
+		"directory":         "/tmp/repo",
+		"limit":             float64(25),
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseGitFindLargeFilesOptions returned error: %v", err)
+	}
+
+	if options.Directory != "/tmp/repo" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.Limit != 25 {
+		t.Fatalf("unexpected limit: %d", options.Limit)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseGitStatusSubdirsOptionsDefaults(t *testing.T) {
+	options, err := parseGitStatusSubdirsOptions(nil)
+	if err != nil {
+		t.Fatalf("parseGitStatusSubdirsOptions returned error: %v", err)
+	}
+
+	if options.Directory != "." {
+		t.Fatalf("unexpected default directory: %s", options.Directory)
+	}
+	if options.Depth != 2 {
+		t.Fatalf("unexpected default depth: %d", options.Depth)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseGitStatusSubdirsOptionsAliases(t *testing.T) {
+	options, err := parseGitStatusSubdirsOptions(map[string]interface{}{
+		"directory":         "/tmp/workspace",
+		"depth":             float64(4),
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseGitStatusSubdirsOptions returned error: %v", err)
+	}
+
+	if options.Directory != "/tmp/workspace" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.Depth != 4 {
+		t.Fatalf("unexpected depth: %d", options.Depth)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesGitStatusSubdirs(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "git_status_subdirs" {
+			return
+		}
+	}
+
+	t.Fatalf("git_status_subdirs not found in tools/list response")
+}
+
+func TestParseDockerShowImagesArchOptionsDefaults(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(nil)
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseDockerShowImagesArchOptionsAliases(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(map[string]interface{}{
+		"working_directory": "/tmp/docker",
+	})
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+
+	if options.WorkingDirectory != "/tmp/docker" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesDockerShowImagesArch(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "docker_show_images_arch" {
+			return
+		}
+	}
+
+	t.Fatalf("docker_show_images_arch not found in tools/list response")
 }
 
 func TestNegotiateProtocolVersion(t *testing.T) {
