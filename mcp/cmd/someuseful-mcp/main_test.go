@@ -255,6 +255,70 @@ func TestHandleToolsListIncludesDockerShowImagesArch(t *testing.T) {
 	t.Fatalf("docker_show_images_arch not found in tools/list response")
 }
 
+func TestParseWatchProgramMemoryOptionsDefaults(t *testing.T) {
+	options, err := parseWatchProgramMemoryOptions(map[string]interface{}{
+		"processName": "postgres",
+	})
+	if err != nil {
+		t.Fatalf("parseWatchProgramMemoryOptions returned error: %v", err)
+	}
+
+	if options.ProcessName != "postgres" {
+		t.Fatalf("unexpected process name: %s", options.ProcessName)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseWatchProgramMemoryOptionsAliases(t *testing.T) {
+	options, err := parseWatchProgramMemoryOptions(map[string]interface{}{
+		"process_name":      "node",
+		"working_directory": "/tmp/runtime",
+	})
+	if err != nil {
+		t.Fatalf("parseWatchProgramMemoryOptions returned error: %v", err)
+	}
+
+	if options.ProcessName != "node" {
+		t.Fatalf("unexpected process name: %s", options.ProcessName)
+	}
+	if options.WorkingDirectory != "/tmp/runtime" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesWatchProgramMemory(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "watch_program_memory" {
+			return
+		}
+	}
+
+	t.Fatalf("watch_program_memory not found in tools/list response")
+}
+
 func TestNegotiateProtocolVersion(t *testing.T) {
 	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
 		t.Fatalf("expected requested supported protocol version, got %s", got)
