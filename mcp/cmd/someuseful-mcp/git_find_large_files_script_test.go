@@ -81,3 +81,42 @@ func TestGitFindLargeFilesScriptPreservesSpecialPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestGitFindLargeFilesScriptDoesNotReturnTreePaths(t *testing.T) {
+	tempDir := t.TempDir()
+	nestedDir := filepath.Join(tempDir, "sub")
+
+	runCommand(t, tempDir, "git", "init")
+	runCommand(t, tempDir, "git", "config", "user.name", "tester")
+	runCommand(t, tempDir, "git", "config", "user.email", "tester@example.com")
+
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("mkdir nested dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "root.txt"), []byte("root payload\n"), 0o644); err != nil {
+		t.Fatalf("write root file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedDir, "nested.txt"), []byte("nested payload\n"), 0o644); err != nil {
+		t.Fatalf("write nested file: %v", err)
+	}
+
+	runCommand(t, tempDir, "git", "add", ".")
+	runCommand(t, tempDir, "git", "-c", "commit.gpgsign=false", "commit", "-m", "init")
+
+	result := runGitFindLargeFilesScript(t, tempDir)
+
+	paths := map[string]bool{}
+	for _, file := range result.Files {
+		paths[file.Path] = true
+	}
+
+	if paths["sub"] {
+		t.Fatalf("unexpected tree path in result: %#v", result.Files)
+	}
+	if !paths["sub/nested.txt"] {
+		t.Fatalf("expected nested blob path in result: %#v", result.Files)
+	}
+	if !paths["root.txt"] {
+		t.Fatalf("expected root blob path in result: %#v", result.Files)
+	}
+}
