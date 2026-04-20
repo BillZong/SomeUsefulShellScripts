@@ -91,6 +91,11 @@ type dockerShowImagesArchOptions struct {
 	WorkingDirectory string
 }
 
+type watchProgramMemoryOptions struct {
+	ProcessName      string
+	WorkingDirectory string
+}
+
 type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
@@ -211,6 +216,36 @@ type dockerShowImagesArchStructuredImage struct {
 type dockerShowImagesArchStructuredResult struct {
 	OK     bool                                  `json:"ok"`
 	Images []dockerShowImagesArchStructuredImage `json:"images"`
+}
+
+type watchProgramMemoryScriptProcess struct {
+	PID        int     `json:"pid"`
+	CPUPercent float64 `json:"cpuPercent"`
+	RSSKb      int64   `json:"rssKb"`
+	VSZKb      int64   `json:"vszKb"`
+}
+
+type watchProgramMemoryScriptResult struct {
+	OK           bool                              `json:"ok"`
+	Timestamp    string                            `json:"timestamp"`
+	ProcessName  string                            `json:"processName"`
+	MatchedCount int                               `json:"matchedCount"`
+	Processes    []watchProgramMemoryScriptProcess `json:"processes"`
+}
+
+type watchProgramMemoryStructuredProcess struct {
+	PID        int     `json:"pid"`
+	CPUPercent float64 `json:"cpuPercent"`
+	RSSKb      int64   `json:"rssKb"`
+	VSZKb      int64   `json:"vszKb"`
+}
+
+type watchProgramMemoryStructuredResult struct {
+	OK           bool                                  `json:"ok"`
+	Timestamp    string                                `json:"timestamp"`
+	ProcessName  string                                `json:"processName"`
+	MatchedCount int                                   `json:"matchedCount"`
+	Processes    []watchProgramMemoryStructuredProcess `json:"processes"`
 }
 
 type server struct {
@@ -385,7 +420,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, and docker_show_images_arch for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, docker_show_images_arch, and watch_program_memory for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -658,6 +693,56 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 				"openWorldHint":   false,
 			},
 		},
+		map[string]interface{}{
+			"name":        "watch_program_memory",
+			"title":       "Sample Program Memory and CPU",
+			"description": "Run the repository's watch-prog-memory CLI and return a one-shot process resource sample.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"processName": map[string]interface{}{
+						"type":        "string",
+						"description": "Process name to match exactly with pgrep -x.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+				"required": []string{"processName"},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":           map[string]interface{}{"type": "boolean"},
+					"timestamp":    map[string]interface{}{"type": "string"},
+					"processName":  map[string]interface{}{"type": "string"},
+					"matchedCount": map[string]interface{}{"type": "integer"},
+					"processes": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"pid":        map[string]interface{}{"type": "integer"},
+								"cpuPercent": map[string]interface{}{"type": "number"},
+								"rssKb":      map[string]interface{}{"type": "integer"},
+								"vszKb":      map[string]interface{}{"type": "integer"},
+							},
+							"required": []string{"pid", "cpuPercent", "rssKb", "vszKb"},
+						},
+					},
+				},
+				"required": []string{"ok", "timestamp", "processName", "matchedCount", "processes"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Program memory watch",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -846,6 +931,47 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 		})
 	case "docker_show_images_arch":
 		result, err := runDockerShowImagesArch(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "watch_program_memory":
+		result, err := runWatchProgramMemory(params.Arguments)
 		if err != nil {
 			return marshalResponse(responseEnvelope{
 				JSONRPC: "2.0",
@@ -1376,6 +1502,97 @@ func parseDockerShowImagesArchOptions(arguments map[string]interface{}) (dockerS
 			return options, fmt.Errorf("workingDirectory must be a string")
 		}
 		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
+func runWatchProgramMemory(arguments map[string]interface{}) (watchProgramMemoryStructuredResult, error) {
+	options, err := parseWatchProgramMemoryOptions(arguments)
+	if err != nil {
+		return watchProgramMemoryStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_WATCH_PROG_MEMORY_SCRIPT", "watch-prog-memory.sh")
+	if err != nil {
+		return watchProgramMemoryStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--process-name", options.ProcessName,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return watchProgramMemoryStructuredResult{}, fmt.Errorf("watch_program_memory failed: %s", stderrText)
+		}
+		return watchProgramMemoryStructuredResult{}, fmt.Errorf("watch_program_memory execution failed: %w", err)
+	}
+
+	var parsed watchProgramMemoryScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return watchProgramMemoryStructuredResult{}, fmt.Errorf("invalid JSON from watch-prog-memory script: %w", err)
+	}
+
+	processes := make([]watchProgramMemoryStructuredProcess, 0, len(parsed.Processes))
+	for _, process := range parsed.Processes {
+		processes = append(processes, watchProgramMemoryStructuredProcess{
+			PID:        process.PID,
+			CPUPercent: process.CPUPercent,
+			RSSKb:      process.RSSKb,
+			VSZKb:      process.VSZKb,
+		})
+	}
+
+	return watchProgramMemoryStructuredResult{
+		OK:           parsed.OK,
+		Timestamp:    parsed.Timestamp,
+		ProcessName:  parsed.ProcessName,
+		MatchedCount: parsed.MatchedCount,
+		Processes:    processes,
+	}, nil
+}
+
+func parseWatchProgramMemoryOptions(arguments map[string]interface{}) (watchProgramMemoryOptions, error) {
+	options := watchProgramMemoryOptions{}
+
+	if len(arguments) == 0 {
+		return options, fmt.Errorf("processName is required")
+	}
+
+	if value, ok := firstValue(arguments, "processName", "process_name"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("processName must be a non-empty string")
+		}
+		options.ProcessName = stringValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	if options.ProcessName == "" {
+		return options, fmt.Errorf("processName is required")
 	}
 
 	return options, nil

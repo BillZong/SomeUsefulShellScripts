@@ -63,11 +63,12 @@ format_size_human() {
 json_print_files() {
     local file=$1
     local first=1
-    local object_id size_bytes path size_human escaped_path escaped_human
+    local object_id size_bytes path_base64 path size_human escaped_path escaped_human
 
     printf '['
-    while IFS=$'\t' read -r object_id size_bytes path; do
+    while IFS=$'\t' read -r object_id size_bytes path_base64; do
         [ -n "$object_id" ] || continue
+        path=$(decode_base64 "$path_base64")
         size_human=$(format_size_human "$size_bytes")
         escaped_path=$(suss_json_escape "$path")
         escaped_human=$(suss_json_escape "$size_human")
@@ -89,6 +90,60 @@ json_print_files() {
         printf '\n  '
     fi
     printf ']'
+}
+
+encode_base64() {
+    printf '%s' "$1" | base64 | tr -d '\n'
+}
+
+decode_base64() {
+    local value=$1
+
+    if printf '%s' "$value" | base64 --decode >/dev/null 2>&1; then
+        printf '%s' "$value" | base64 --decode
+        return
+    fi
+
+    printf '%s' "$value" | base64 -D
+}
+
+collect_blob_results() {
+    local directory=$1
+    local output_file=$2
+    local object_ids_file=$3
+    local paths_file=$4
+    local token pending_object_id metadata object_id object_type size_bytes path path_base64
+
+    : > "$object_ids_file"
+    : > "$paths_file"
+    : > "$output_file"
+
+    while IFS= read -r -d '' token; do
+        if [[ "$token" == path=* ]]; then
+            [ -n "${pending_object_id:-}" ] || suss_die "$PROGRAM_NAME" "missing object id for path token"
+            printf '%s\0' "$pending_object_id" >> "$object_ids_file"
+            printf '%s\0' "${token#path=}" >> "$paths_file"
+            pending_object_id=""
+            continue
+        fi
+
+        pending_object_id=$token
+    done < <(git -C "$directory" rev-list --objects -z --all)
+
+    [ -s "$object_ids_file" ] || return 0
+
+    exec 3< "$paths_file"
+    while IFS= read -r -d '' metadata; do
+        IFS=' ' read -r object_id object_type size_bytes <<EOF
+$metadata
+EOF
+
+        [ "$object_type" = "blob" ] || continue
+        IFS= read -r -d '' path <&3 || suss_die "$PROGRAM_NAME" "missing path for object id: $object_id"
+        path_base64=$(encode_base64 "$path")
+        printf '%s\t%s\t%s\n' "$object_id" "$size_bytes" "$path_base64" >> "$output_file"
+    done < <(git -C "$directory" cat-file --batch-check='%(objectname) %(objecttype) %(objectsize)' -Z < "$object_ids_file")
+    exec 3<&-
 }
 
 JSON_OUTPUT=0
@@ -137,6 +192,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+suss_require_command "base64" "$PROGRAM_NAME"
 suss_require_command "git" "$PROGRAM_NAME"
 [ -d "$DIRECTORY" ] || suss_die "$PROGRAM_NAME" "directory does not exist: $DIRECTORY"
 
@@ -153,27 +209,11 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 RAW_RESULTS_FILE="$TMP_DIR/raw.tsv"
 RESULTS_FILE="$TMP_DIR/results.tsv"
+OBJECT_IDS_FILE="$TMP_DIR/object-ids.z"
+PATHS_FILE="$TMP_DIR/paths.z"
 
-git -C "$DIRECTORY" rev-list --objects --all \
-    | git -C "$DIRECTORY" cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' \
-    | sed -n 's/^blob //p' \
-    | awk '
-        {
-            object_id = $1
-            size_bytes = $2
-            path = ""
-
-            if (NF >= 3) {
-                $1 = ""
-                $2 = ""
-                sub(/^  */, "")
-                path = $0
-            }
-
-            printf "%s\t%s\t%s\n", object_id, size_bytes, path
-        }
-    ' \
-    | LC_ALL=C sort -t $'\t' -k2,2nr -k1,1 > "$RAW_RESULTS_FILE"
+collect_blob_results "$DIRECTORY" "$RAW_RESULTS_FILE" "$OBJECT_IDS_FILE" "$PATHS_FILE"
+LC_ALL=C sort -t $'\t' -k2,2nr -k1,1 "$RAW_RESULTS_FILE" -o "$RAW_RESULTS_FILE"
 
 if [ "$LIMIT" -gt 0 ]; then
     sed -n "1,${LIMIT}p" "$RAW_RESULTS_FILE" > "$RESULTS_FILE"
@@ -207,8 +247,9 @@ if [ "$RETURNED_COUNT" -eq 0 ]; then
     exit 0
 fi
 
-while IFS=$'\t' read -r object_id size_bytes path; do
+while IFS=$'\t' read -r object_id size_bytes path_base64; do
     [ -n "$object_id" ] || continue
+    path=$(decode_base64 "$path_base64")
     printf '%s\t%s\t%s\t%s\n' "$object_id" "$size_bytes" "$(format_size_human "$size_bytes")" "$path"
 done < "$RESULTS_FILE"
 

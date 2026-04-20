@@ -7,3 +7,4 @@ Some utils using shell/python/perl scripts.
 - `docs/`: inventory and migration planning
 - `archive/`: planned archive area for deprecated scripts
 - `mcp/`: minimal MCP server skeleton for agent-facing tools
+- `shell/lib/`: shared Bash helpers for stabilized CLIs
