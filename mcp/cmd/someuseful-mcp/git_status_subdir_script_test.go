@@ -9,15 +9,18 @@ import (
 	"testing"
 )
 
-type gitStatusSubdirScriptTestRepository struct {
-	Path string `json:"path"`
+type gitStatusSubdirScriptRepositoryResult struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
 }
 
-type gitStatusSubdirScriptTestResult struct {
-	OK           bool                                  `json:"ok"`
-	Directory    string                                `json:"directory"`
-	Depth        int                                   `json:"depth"`
-	Repositories []gitStatusSubdirScriptTestRepository `json:"repositories"`
+type gitStatusSubdirScriptResult struct {
+	OK           bool                                    `json:"ok"`
+	Directory    string                                  `json:"directory"`
+	Depth        int                                     `json:"depth"`
+	Repositories []gitStatusSubdirScriptRepositoryResult `json:"repositories"`
 }
 
 func repoRootForScriptTests(t *testing.T) string {
@@ -52,7 +55,7 @@ func runCommand(t *testing.T, dir string, name string, args ...string) string {
 	return string(output)
 }
 
-func runGitStatusSubdirScript(t *testing.T, directory string, depth int) gitStatusSubdirScriptTestResult {
+func runGitStatusSubdirScript(t *testing.T, directory string, depth int) gitStatusSubdirScriptResult {
 	t.Helper()
 
 	scriptPath := filepath.Join(repoRootForScriptTests(t), "shell", "git-status-subdir.sh")
@@ -63,7 +66,7 @@ func runGitStatusSubdirScript(t *testing.T, directory string, depth int) gitStat
 		t.Fatalf("git-status-subdir.sh failed: %v\n%s", err, string(output))
 	}
 
-	var result gitStatusSubdirScriptTestResult
+	var result gitStatusSubdirScriptResult
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatalf("decode script output: %v\n%s", err, string(output))
 	}
@@ -83,6 +86,28 @@ func commitFixtureFile(t *testing.T, repoDir string, filename string, content st
 
 	runCommand(t, repoDir, "git", "add", filename)
 	runCommand(t, repoDir, "git", "-c", "commit.gpgsign=false", "commit", "-m", "init")
+}
+
+func TestGitStatusSubdirScriptFindsRepoAtExactDepth(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "root")
+	repoDir := filepath.Join(rootDir, "level1", "level2")
+
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("mkdir repo dir: %v", err)
+	}
+
+	runCommand(t, repoDir, "git", "init")
+	commitFixtureFile(t, repoDir, "file.txt", "exact depth\n")
+
+	result := runGitStatusSubdirScript(t, rootDir, 2)
+	if len(result.Repositories) != 1 {
+		t.Fatalf("expected one repository, got %#v", result.Repositories)
+	}
+
+	if result.Repositories[0].Path != repoDir {
+		t.Fatalf("unexpected repository path: %s", result.Repositories[0].Path)
+	}
 }
 
 func TestGitStatusSubdirScriptFindsWorktreeGitFile(t *testing.T) {
@@ -114,5 +139,40 @@ func TestGitStatusSubdirScriptFindsWorktreeGitFile(t *testing.T) {
 	}
 	if !paths[worktreeDir] {
 		t.Fatalf("worktree repository missing from result: %#v", result.Repositories)
+	}
+}
+
+func TestGitStatusSubdirScriptToleratesUnbornRepo(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "root")
+	readyRepoDir := filepath.Join(rootDir, "ready")
+	unbornRepoDir := filepath.Join(rootDir, "unborn")
+
+	if err := os.MkdirAll(readyRepoDir, 0o755); err != nil {
+		t.Fatalf("mkdir ready repo dir: %v", err)
+	}
+	if err := os.MkdirAll(unbornRepoDir, 0o755); err != nil {
+		t.Fatalf("mkdir unborn repo dir: %v", err)
+	}
+
+	runCommand(t, readyRepoDir, "git", "init")
+	commitFixtureFile(t, readyRepoDir, "file.txt", "ready repo\n")
+	runCommand(t, unbornRepoDir, "git", "init")
+
+	result := runGitStatusSubdirScript(t, rootDir, 1)
+	if len(result.Repositories) != 2 {
+		t.Fatalf("expected two repositories, got %#v", result.Repositories)
+	}
+
+	branches := map[string]string{}
+	for _, repository := range result.Repositories {
+		branches[repository.Path] = repository.Branch
+	}
+
+	if branches[readyRepoDir] == "" {
+		t.Fatalf("ready repo missing from result: %#v", result.Repositories)
+	}
+	if branches[unbornRepoDir] == "" {
+		t.Fatalf("unborn repo missing from result: %#v", result.Repositories)
 	}
 }

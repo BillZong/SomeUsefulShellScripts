@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestParseGoListDepOptionsDefaults(t *testing.T) {
 	options, err := parseGoListDepOptions(nil)
@@ -90,51 +96,75 @@ func TestParseGitCountLineOptionsAliases(t *testing.T) {
 	}
 }
 
-func TestNegotiateProtocolVersion(t *testing.T) {
-	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
-		t.Fatalf("expected requested supported protocol version, got %s", got)
+func TestParseGitFindLargeFilesOptionsDefaults(t *testing.T) {
+	options, err := parseGitFindLargeFilesOptions(nil)
+	if err != nil {
+		t.Fatalf("parseGitFindLargeFilesOptions returned error: %v", err)
 	}
-	if got := negotiateProtocolVersion("2099-01-01"); got != latestProtocolVer {
-		t.Fatalf("expected fallback to latest protocol version, got %s", got)
+
+	if options.Directory != "." {
+		t.Fatalf("unexpected default directory: %s", options.Directory)
+	}
+	if options.Limit != 0 {
+		t.Fatalf("unexpected default limit: %d", options.Limit)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
 	}
 }
 
-func TestParseDockerShowImagesArchOptionsDefaults(t *testing.T) {
-	options, err := parseDockerShowImagesArchOptions(nil)
+func TestParseGitFindLargeFilesOptionsAliases(t *testing.T) {
+	options, err := parseGitFindLargeFilesOptions(map[string]interface{}{
+		"directory":         "/tmp/repo",
+		"limit":             float64(25),
+		"working_directory": "/tmp",
+	})
 	if err != nil {
-		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+		t.Fatalf("parseGitFindLargeFilesOptions returned error: %v", err)
 	}
-	if len(options.Images) != 0 {
-		t.Fatalf("expected empty default images, got %#v", options.Images)
+
+	if options.Directory != "/tmp/repo" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.Limit != 25 {
+		t.Fatalf("unexpected limit: %d", options.Limit)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
 	}
 }
 
-func TestParseGitStatusSubdirOptionsDefaults(t *testing.T) {
-	options, err := parseGitStatusSubdirOptions(nil)
+func TestParseGitStatusSubdirsOptionsDefaults(t *testing.T) {
+	options, err := parseGitStatusSubdirsOptions(nil)
 	if err != nil {
-		t.Fatalf("parseGitStatusSubdirOptions returned error: %v", err)
+		t.Fatalf("parseGitStatusSubdirsOptions returned error: %v", err)
 	}
+
 	if options.Directory != "." {
 		t.Fatalf("unexpected default directory: %s", options.Directory)
 	}
 	if options.Depth != 2 {
 		t.Fatalf("unexpected default depth: %d", options.Depth)
 	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
 }
 
-func TestParseGitStatusSubdirOptionsAliases(t *testing.T) {
-	options, err := parseGitStatusSubdirOptions(map[string]interface{}{
+func TestParseGitStatusSubdirsOptionsAliases(t *testing.T) {
+	options, err := parseGitStatusSubdirsOptions(map[string]interface{}{
 		"directory":         "/tmp/workspace",
-		"depth":             float64(3),
+		"depth":             float64(4),
 		"working_directory": "/tmp",
 	})
 	if err != nil {
-		t.Fatalf("parseGitStatusSubdirOptions returned error: %v", err)
+		t.Fatalf("parseGitStatusSubdirsOptions returned error: %v", err)
 	}
+
 	if options.Directory != "/tmp/workspace" {
 		t.Fatalf("unexpected directory: %s", options.Directory)
 	}
-	if options.Depth != 3 {
+	if options.Depth != 4 {
 		t.Fatalf("unexpected depth: %d", options.Depth)
 	}
 	if options.WorkingDirectory != "/tmp" {
@@ -142,24 +172,182 @@ func TestParseGitStatusSubdirOptionsAliases(t *testing.T) {
 	}
 }
 
-func TestParseWatchProgramMemoryOptionsRequired(t *testing.T) {
-	if _, err := parseWatchProgramMemoryOptions(nil); err == nil {
-		t.Fatalf("expected missing program to fail")
+func TestHandleToolsListIncludesGitStatusSubdirs(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "git_status_subdirs" {
+			return
+		}
+	}
+
+	t.Fatalf("git_status_subdirs not found in tools/list response")
+}
+
+func TestParseDockerShowImagesArchOptionsDefaults(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(nil)
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseDockerShowImagesArchOptionsAliases(t *testing.T) {
+	options, err := parseDockerShowImagesArchOptions(map[string]interface{}{
+		"working_directory": "/tmp/docker",
+	})
+	if err != nil {
+		t.Fatalf("parseDockerShowImagesArchOptions returned error: %v", err)
+	}
+
+	if options.WorkingDirectory != "/tmp/docker" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesDockerShowImagesArch(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "docker_show_images_arch" {
+			return
+		}
+	}
+
+	t.Fatalf("docker_show_images_arch not found in tools/list response")
+}
+
+func TestParseWatchProgramMemoryOptionsDefaults(t *testing.T) {
+	options, err := parseWatchProgramMemoryOptions(map[string]interface{}{
+		"processName": "postgres",
+	})
+	if err != nil {
+		t.Fatalf("parseWatchProgramMemoryOptions returned error: %v", err)
+	}
+
+	if options.ProcessName != "postgres" {
+		t.Fatalf("unexpected process name: %s", options.ProcessName)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty default working directory, got: %s", options.WorkingDirectory)
 	}
 }
 
 func TestParseWatchProgramMemoryOptionsAliases(t *testing.T) {
 	options, err := parseWatchProgramMemoryOptions(map[string]interface{}{
-		"program":           "claude",
-		"working_directory": "/tmp",
+		"process_name":      "node",
+		"working_directory": "/tmp/runtime",
 	})
 	if err != nil {
 		t.Fatalf("parseWatchProgramMemoryOptions returned error: %v", err)
 	}
-	if options.Program != "claude" {
-		t.Fatalf("unexpected program: %s", options.Program)
+
+	if options.ProcessName != "node" {
+		t.Fatalf("unexpected process name: %s", options.ProcessName)
 	}
-	if options.WorkingDirectory != "/tmp" {
+	if options.WorkingDirectory != "/tmp/runtime" {
 		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesWatchProgramMemory(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "watch_program_memory" {
+			return
+		}
+	}
+
+	t.Fatalf("watch_program_memory not found in tools/list response")
+}
+
+func TestRunWatchProgramMemoryReturnsScriptFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	scriptPath := filepath.Join(tempDir, "watch-prog-memory.sh")
+
+	if err := os.WriteFile(scriptPath, []byte("#!/usr/bin/env bash\nprintf 'boom\\n' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	t.Setenv("SUSS_WATCH_PROG_MEMORY_SCRIPT", scriptPath)
+
+	_, err := runWatchProgramMemory(map[string]interface{}{
+		"processName": "demo",
+	})
+	if err == nil {
+		t.Fatalf("expected runWatchProgramMemory to fail")
+	}
+	if !strings.Contains(err.Error(), "watch_program_memory failed: boom") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNegotiateProtocolVersion(t *testing.T) {
+	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
+		t.Fatalf("expected requested supported protocol version, got %s", got)
+	}
+	if got := negotiateProtocolVersion("2099-01-01"); got != latestProtocolVer {
+		t.Fatalf("expected fallback to latest protocol version, got %s", got)
 	}
 }

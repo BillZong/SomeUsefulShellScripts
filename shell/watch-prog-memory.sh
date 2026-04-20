@@ -12,26 +12,48 @@ usage() {
     cat <<EOF
 Usage: $PROGRAM_NAME [options]
 
-Sample RSS memory usage for processes matching a program name.
+Capture a one-shot CPU and memory sample for processes matching a name exactly.
 
 Options:
-  -h, --help                  Show this help message.
-  -j, --json                  Print a JSON document instead of plain text.
-  -p, --program NAME          Program name or pattern to match.
-  -o, --output-file PATH      Append a TSV snapshot to a log file.
-      --dry-run               Show what would be written without touching the output file.
+  -h, --help                 Show this help message.
+  -j, --json                 Print a JSON document instead of plain text.
+  -p, --process-name NAME    Process name to match with pgrep -x.
 
 Examples:
-  $PROGRAM_NAME --program postgres
-  $PROGRAM_NAME --json -p claude
-  $PROGRAM_NAME -p redis-server --output-file /tmp/redis-memory.tsv
+  $PROGRAM_NAME --process-name postgres
+  $PROGRAM_NAME --json --process-name node
 EOF
 }
 
+json_print_processes() {
+    local file=$1
+    local first=1
+    local pid cpu_percent rss_kb vsz_kb
+
+    printf '['
+    while IFS=$'\t' read -r pid cpu_percent rss_kb vsz_kb; do
+        [ -n "$pid" ] || continue
+        if [ $first -eq 0 ]; then
+            printf ','
+        fi
+
+        printf '\n    {'
+        printf '"pid":%s,' "$pid"
+        printf '"cpuPercent":%s,' "$cpu_percent"
+        printf '"rssKb":%s,' "$rss_kb"
+        printf '"vszKb":%s' "$vsz_kb"
+        printf '}'
+        first=0
+    done < "$file"
+
+    if [ $first -eq 0 ]; then
+        printf '\n  '
+    fi
+    printf ']'
+}
+
 JSON_OUTPUT=0
-PROGRAM_PATTERN=""
-OUTPUT_FILE=""
-DRY_RUN=0
+PROCESS_NAME=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -43,122 +65,104 @@ while [ "$#" -gt 0 ]; do
             JSON_OUTPUT=1
             shift
             ;;
-        -p | --program)
-            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --program"
-            PROGRAM_PATTERN=$2
+        -p | --process-name)
+            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --process-name"
+            PROCESS_NAME=$2
             shift 2
             ;;
-        --program=*)
-            PROGRAM_PATTERN=${1#*=}
+        --process-name=*)
+            PROCESS_NAME=${1#*=}
             shift
             ;;
-        -o | --output-file)
-            [ "$#" -ge 2 ] || suss_die "$PROGRAM_NAME" "missing value for --output-file"
-            OUTPUT_FILE=$2
-            shift 2
-            ;;
-        --output-file=*)
-            OUTPUT_FILE=${1#*=}
+        --)
             shift
-            ;;
-        --dry-run)
-            DRY_RUN=1
-            shift
+            [ "$#" -eq 0 ] || suss_die "$PROGRAM_NAME" "unexpected positional arguments: $*"
+            break
             ;;
         -*)
             suss_die "$PROGRAM_NAME" "unknown option: $1"
             ;;
         *)
-            if [ -z "$PROGRAM_PATTERN" ]; then
-                PROGRAM_PATTERN=$1
-                shift
-                continue
-            fi
             suss_die "$PROGRAM_NAME" "unexpected positional argument: $1"
             ;;
     esac
 done
 
-[ -n "$PROGRAM_PATTERN" ] || suss_die "$PROGRAM_NAME" "program name is required"
-suss_require_command "ps" "$PROGRAM_NAME"
+[ -n "$PROCESS_NAME" ] || suss_die "$PROGRAM_NAME" "--process-name is required"
 
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-TMP_FILE=$(mktemp "${TMPDIR:-/tmp}/watch-prog-memory.XXXXXX")
-trap 'rm -f "$TMP_FILE"' EXIT
-
-ps -Ao pid=,rss=,comm=,args= \
-    | awk -v pattern="$PROGRAM_PATTERN" -v self_pid="$$" '
-        index($0, pattern) > 0 && $1 != self_pid && $3 != "awk" {
-            pid = $1
-            rss = $2
-            command = $3
-            $1 = ""
-            $2 = ""
-            $3 = ""
-            sub(/^[[:space:]]+/, "", $0)
-            printf "%s\t%s\t%s\t%s\n", pid, rss, command, $0
-        }
-    ' > "$TMP_FILE"
-
-match_count=$(awk 'END {print NR + 0}' "$TMP_FILE")
-total_rss_kb=$(awk -F '\t' '{sum += $2} END {print sum + 0}' "$TMP_FILE")
-
-if [ -n "$OUTPUT_FILE" ]; then
-    log_line=$(printf '%s\t%s\t%s\n' "$TIMESTAMP" "$PROGRAM_PATTERN" "$total_rss_kb")
-    if [ "$DRY_RUN" -eq 0 ]; then
-        mkdir -p "$(dirname "$OUTPUT_FILE")"
-        printf '%s\n' "$log_line" >> "$OUTPUT_FILE"
+suss_require_command "pgrep" "$PROGRAM_NAME"
+if ! command -v pidstat >/dev/null 2>&1; then
+    if [[ "${OSTYPE:-}" == darwin* ]]; then
+        suss_die "$PROGRAM_NAME" "pidstat command not found; install sysstat with 'brew install sysstat'"
     fi
+    suss_die "$PROGRAM_NAME" "pidstat command not found; please install the sysstat package"
 fi
+
+TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/watch-prog-memory.XXXXXX")
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+PID_FILE="$TMP_DIR/pids.txt"
+CPU_FILE="$TMP_DIR/cpu.tsv"
+MEMORY_FILE="$TMP_DIR/memory.tsv"
+RESULTS_FILE="$TMP_DIR/results.tsv"
+
+pgrep -x "$PROCESS_NAME" > "$PID_FILE" 2>/dev/null || true
+if [ ! -s "$PID_FILE" ]; then
+    suss_die "$PROGRAM_NAME" "no running process matched: $PROCESS_NAME"
+fi
+
+LC_ALL=C sort -n "$PID_FILE" -o "$PID_FILE"
+PID_CSV=$(paste -sd, "$PID_FILE")
+
+pidstat -u -p "$PID_CSV" 1 1 \
+    | awk '
+        /^Average:/ && $3 ~ /^[0-9]+$/ {
+            printf "%s\t%s\n", $3, $(NF - 2)
+        }
+    ' > "$CPU_FILE"
+
+pidstat -r -p "$PID_CSV" 1 1 \
+    | awk '
+        /^Average:/ && $3 ~ /^[0-9]+$/ {
+            printf "%s\t%s\t%s\n", $3, $(NF - 2), $(NF - 3)
+        }
+    ' > "$MEMORY_FILE"
+
+: > "$RESULTS_FILE"
+while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+
+    cpu_percent=$(awk -F $'\t' -v pid="$pid" '$1 == pid { print $2; exit }' "$CPU_FILE")
+    rss_kb=$(awk -F $'\t' -v pid="$pid" '$1 == pid { print $2; exit }' "$MEMORY_FILE")
+    vsz_kb=$(awk -F $'\t' -v pid="$pid" '$1 == pid { print $3; exit }' "$MEMORY_FILE")
+
+    [ -n "$cpu_percent" ] || suss_die "$PROGRAM_NAME" "failed to parse CPU sample for pid: $pid"
+    [ -n "$rss_kb" ] || suss_die "$PROGRAM_NAME" "failed to parse RSS sample for pid: $pid"
+    [ -n "$vsz_kb" ] || suss_die "$PROGRAM_NAME" "failed to parse VSZ sample for pid: $pid"
+
+    printf '%s\t%s\t%s\t%s\n' "$pid" "$cpu_percent" "$rss_kb" "$vsz_kb" >> "$RESULTS_FILE"
+done < "$PID_FILE"
+
+MATCHED_COUNT=$(wc -l < "$RESULTS_FILE" | awk '{print $1}')
+TIMESTAMP=$(date "+%Y-%m-%dT%H:%M:%S%z")
 
 if [ "$JSON_OUTPUT" -eq 1 ]; then
     printf '{\n'
     printf '  "ok": true,\n'
-    printf '  "timestamp": "%s",\n' "$(suss_json_escape "$TIMESTAMP")"
-    printf '  "program": "%s",\n' "$(suss_json_escape "$PROGRAM_PATTERN")"
-    printf '  "match_count": %s,\n' "$match_count"
-    printf '  "total_rss_kb": %s,\n' "$total_rss_kb"
-    if [ -n "$OUTPUT_FILE" ]; then
-        printf '  "output_file": "%s",\n' "$(suss_json_escape "$OUTPUT_FILE")"
-        if [ "$DRY_RUN" -eq 1 ]; then
-            printf '  "dry_run": true,\n'
-        else
-            printf '  "dry_run": false,\n'
-        fi
-    fi
-    printf '  "processes": [\n'
-    first=1
-    while IFS=$'\t' read -r pid rss_kb command args; do
-        [ -n "$pid" ] || continue
-        if [ $first -eq 0 ]; then
-            printf ',\n'
-        fi
-        printf '    {\n'
-        printf '      "pid": %s,\n' "$pid"
-        printf '      "rss_kb": %s,\n' "$rss_kb"
-        printf '      "command": "%s",\n' "$(suss_json_escape "$command")"
-        printf '      "args": "%s"\n' "$(suss_json_escape "$args")"
-        printf '    }'
-        first=0
-    done < "$TMP_FILE"
-    printf '\n  ]\n'
-    printf '}\n'
+    printf '  "timestamp": "%s",\n' "$TIMESTAMP"
+    printf '  "processName": "%s",\n' "$(suss_json_escape "$PROCESS_NAME")"
+    printf '  "matchedCount": %s,\n' "$MATCHED_COUNT"
+    printf '  "processes": '
+    json_print_processes "$RESULTS_FILE"
+    printf '\n}\n'
     exit 0
 fi
 
 printf 'timestamp: %s\n' "$TIMESTAMP"
-printf 'program: %s\n' "$PROGRAM_PATTERN"
-printf 'matched processes: %s\n' "$match_count"
-printf 'total rss (KB): %s\n' "$total_rss_kb"
-if [ -n "$OUTPUT_FILE" ]; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-        printf 'dry run log target: %s\n' "$OUTPUT_FILE"
-    else
-        printf 'log appended: %s\n' "$OUTPUT_FILE"
-    fi
-fi
+printf 'process name: %s\n' "$PROCESS_NAME"
+printf 'matched count: %s\n' "$MATCHED_COUNT"
 
-while IFS=$'\t' read -r pid rss_kb command args; do
+while IFS=$'\t' read -r pid cpu_percent rss_kb vsz_kb; do
     [ -n "$pid" ] || continue
-    printf 'pid=%s rss_kb=%s command=%s args=%s\n' "$pid" "$rss_kb" "$command" "$args"
-done < "$TMP_FILE"
+    printf '%s\t%s\t%s\t%s\n' "$pid" "$cpu_percent" "$rss_kb" "$vsz_kb"
+done < "$RESULTS_FILE"

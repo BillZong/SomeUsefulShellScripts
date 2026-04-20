@@ -2,19 +2,20 @@
 
 这是当前仓库的最小 MCP 骨架，目标是先把低风险、结构化、可组合的能力挂出来，再逐步扩展更多工具。
 
-当前暴露五个 tool：
+当前暴露六个 tool：
 
 - `go_list_dep`
 - `git_count_line`
-- `docker_show_images_arch`
+- `git_find_large_files`
 - `git_status_subdirs`
+- `docker_show_images_arch`
 - `watch_program_memory`
 
 ## 特点
 
 - 使用 `stdio` 传输，适合本地被 Agent 进程拉起。
 - 不依赖第三方 SDK，便于在当前仓库中快速验证和维护。
-- 当前通过调用 `shell/go-list-dep.sh` 提供能力，后续可以逐步把底层脚本替换成更稳定的实现。
+- 当前通过调用 `shell/` 下的 Bash CLI 提供能力，后续可以逐步把底层脚本替换成更稳定的实现。
 
 ## 运行
 
@@ -113,16 +114,18 @@ openclaw agent \
   - 显式指定 `go-list-dep` 脚本路径。
 - `SUSS_GIT_COUNT_LINE_SCRIPT`
   - 显式指定 `git-count-line.sh` 脚本路径。
-- `SUSS_DOCKER_SHOW_IMAGES_ARCH_SCRIPT`
-  - 显式指定 `docker-show-images-arch.sh` 脚本路径。
+- `SUSS_GIT_FIND_LARGE_FILES_SCRIPT`
+  - 显式指定 `git-find-large-files.sh` 脚本路径。
 - `SUSS_GIT_STATUS_SUBDIR_SCRIPT`
   - 显式指定 `git-status-subdir.sh` 脚本路径。
-- `SUSS_WATCH_PROGRAM_MEMORY_SCRIPT`
+- `SUSS_DOCKER_SHOW_IMAGES_ARCH_SCRIPT`
+  - 显式指定 `docker-show-images-arch.sh` 脚本路径。
+- `SUSS_WATCH_PROG_MEMORY_SCRIPT`
   - 显式指定 `watch-prog-memory.sh` 脚本路径。
 
-如果两者都不传，服务会优先尝试：
+如果这些变量都不传，服务会优先尝试：
 
-1. 当前目录所在 git 仓库根目录下的 `shell/go-list-dep.sh`
+1. 当前目录所在 git 仓库根目录下的 `shell/<script>.sh`
 2. 当前工作目录附近的常见相对路径
 
 ## Tool: `go_list_dep`
@@ -172,23 +175,30 @@ openclaw agent \
 - `removedLines`
 - `totalLines`
 
-## Tool: `docker_show_images_arch`
+## Tool: `git_find_large_files`
 
 输入参数：
 
-- `images`
-  - `string[]`，可选，默认扫描本机全部本地镜像
+- `directory`
+  - `string`，可选，默认 `"."`
+- `limit`
+  - `integer`，可选，默认 `0`，表示不限制返回数量
 - `workingDirectory`
   - `string`，可选，用于指定底层脚本的启动目录
 
 输出：
 
 - `ok`
-- `images[].id`
-- `images[].repoTags`
-- `images[].architecture`
-- `images[].os`
-- `images[].variant`
+- `directory`
+- `limit`
+- `totalCount`
+- `returnedCount`
+- `truncated`
+- `files`
+  - `objectId`
+  - `path`
+  - `sizeBytes`
+  - `sizeHuman`
 
 ## Tool: `git_status_subdirs`
 
@@ -206,24 +216,33 @@ openclaw agent \
 - `ok`
 - `directory`
 - `depth`
-- `repositories[].path`
-- `repositories[].relativePath`
-- `repositories[].branch`
-- `repositories[].upstream`
-- `repositories[].ahead`
-- `repositories[].behind`
-- `repositories[].stagedCount`
-- `repositories[].unstagedCount`
-- `repositories[].untrackedCount`
-- `repositories[].conflictedCount`
-- `repositories[].clean`
+- `repositories`
+  - `path`
+  - `branch`
+  - `isClean`
+  - `porcelain`
+
+## Tool: `docker_show_images_arch`
+
+输入参数：
+
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `images`
+  - `id`
+  - `repoTags`
+  - `architecture`
 
 ## Tool: `watch_program_memory`
 
 输入参数：
 
-- `program`
-  - `string`，必填，进程名或命令行匹配片段
+- `processName`
+  - `string`，必填，使用 `pgrep -x` 精确匹配的进程名
 - `workingDirectory`
   - `string`，可选，用于指定底层脚本的启动目录
 
@@ -231,13 +250,13 @@ openclaw agent \
 
 - `ok`
 - `timestamp`
-- `program`
-- `matchCount`
-- `totalRssKb`
-- `processes[].pid`
-- `processes[].rssKb`
-- `processes[].command`
-- `processes[].args`
+- `processName`
+- `matchedCount`
+- `processes`
+  - `pid`
+  - `cpuPercent`
+  - `rssKb`
+  - `vszKb`
 
 ## 设计取舍
 

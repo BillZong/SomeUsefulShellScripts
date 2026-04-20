@@ -75,19 +75,24 @@ type gitCountLineOptions struct {
 	WorkingDirectory string
 }
 
-type dockerShowImagesArchOptions struct {
-	Images           []string
+type gitFindLargeFilesOptions struct {
+	Directory        string
+	Limit            int
 	WorkingDirectory string
 }
 
-type gitStatusSubdirOptions struct {
+type gitStatusSubdirsOptions struct {
 	Directory        string
 	Depth            int
 	WorkingDirectory string
 }
 
+type dockerShowImagesArchOptions struct {
+	WorkingDirectory string
+}
+
 type watchProgramMemoryOptions struct {
-	Program          string
+	ProcessName      string
 	WorkingDirectory string
 }
 
@@ -129,12 +134,72 @@ type gitCountLineStructuredResult struct {
 	TotalLines   int    `json:"totalLines"`
 }
 
+type gitFindLargeFilesScriptFile struct {
+	ObjectID  string `json:"object_id"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"size_bytes"`
+	SizeHuman string `json:"size_human"`
+}
+
+type gitFindLargeFilesScriptResult struct {
+	OK            bool                          `json:"ok"`
+	Directory     string                        `json:"directory"`
+	Limit         int                           `json:"limit"`
+	TotalCount    int                           `json:"total_count"`
+	ReturnedCount int                           `json:"returned_count"`
+	Truncated     bool                          `json:"truncated"`
+	Files         []gitFindLargeFilesScriptFile `json:"files"`
+}
+
+type gitFindLargeFilesStructuredFile struct {
+	ObjectID  string `json:"objectId"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
+	SizeHuman string `json:"sizeHuman"`
+}
+
+type gitFindLargeFilesStructuredResult struct {
+	OK            bool                              `json:"ok"`
+	Directory     string                            `json:"directory"`
+	Limit         int                               `json:"limit"`
+	TotalCount    int                               `json:"totalCount"`
+	ReturnedCount int                               `json:"returnedCount"`
+	Truncated     bool                              `json:"truncated"`
+	Files         []gitFindLargeFilesStructuredFile `json:"files"`
+}
+
+type gitStatusSubdirsScriptRepository struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
+}
+
+type gitStatusSubdirsScriptResult struct {
+	OK           bool                               `json:"ok"`
+	Directory    string                             `json:"directory"`
+	Depth        int                                `json:"depth"`
+	Repositories []gitStatusSubdirsScriptRepository `json:"repositories"`
+}
+
+type gitStatusSubdirsStructuredRepository struct {
+	Path      string   `json:"path"`
+	Branch    string   `json:"branch"`
+	IsClean   bool     `json:"isClean"`
+	Porcelain []string `json:"porcelain"`
+}
+
+type gitStatusSubdirsStructuredResult struct {
+	OK           bool                                   `json:"ok"`
+	Directory    string                                 `json:"directory"`
+	Depth        int                                    `json:"depth"`
+	Repositories []gitStatusSubdirsStructuredRepository `json:"repositories"`
+}
+
 type dockerShowImagesArchScriptImage struct {
 	ID           string   `json:"id"`
-	RepoTags     []string `json:"repo_tags"`
+	RepoTags     []string `json:"repoTags"`
 	Architecture string   `json:"architecture"`
-	OS           string   `json:"os"`
-	Variant      string   `json:"variant"`
 }
 
 type dockerShowImagesArchScriptResult struct {
@@ -146,8 +211,6 @@ type dockerShowImagesArchStructuredImage struct {
 	ID           string   `json:"id"`
 	RepoTags     []string `json:"repoTags"`
 	Architecture string   `json:"architecture"`
-	OS           string   `json:"os"`
-	Variant      string   `json:"variant"`
 }
 
 type dockerShowImagesArchStructuredResult struct {
@@ -155,78 +218,34 @@ type dockerShowImagesArchStructuredResult struct {
 	Images []dockerShowImagesArchStructuredImage `json:"images"`
 }
 
-type gitStatusSubdirScriptRepository struct {
-	Path            string `json:"path"`
-	RelativePath    string `json:"relative_path"`
-	Branch          string `json:"branch"`
-	Upstream        string `json:"upstream"`
-	Ahead           int    `json:"ahead"`
-	Behind          int    `json:"behind"`
-	StagedCount     int    `json:"staged_count"`
-	UnstagedCount   int    `json:"unstaged_count"`
-	UntrackedCount  int    `json:"untracked_count"`
-	ConflictedCount int    `json:"conflicted_count"`
-	Clean           bool   `json:"clean"`
-}
-
-type gitStatusSubdirScriptResult struct {
-	OK           bool                              `json:"ok"`
-	Directory    string                            `json:"directory"`
-	Depth        int                               `json:"depth"`
-	Repositories []gitStatusSubdirScriptRepository `json:"repositories"`
-}
-
-type gitStatusSubdirStructuredRepository struct {
-	Path            string `json:"path"`
-	RelativePath    string `json:"relativePath"`
-	Branch          string `json:"branch"`
-	Upstream        string `json:"upstream"`
-	Ahead           int    `json:"ahead"`
-	Behind          int    `json:"behind"`
-	StagedCount     int    `json:"stagedCount"`
-	UnstagedCount   int    `json:"unstagedCount"`
-	UntrackedCount  int    `json:"untrackedCount"`
-	ConflictedCount int    `json:"conflictedCount"`
-	Clean           bool   `json:"clean"`
-}
-
-type gitStatusSubdirStructuredResult struct {
-	OK           bool                                  `json:"ok"`
-	Directory    string                                `json:"directory"`
-	Depth        int                                   `json:"depth"`
-	Repositories []gitStatusSubdirStructuredRepository `json:"repositories"`
-}
-
 type watchProgramMemoryScriptProcess struct {
-	PID     int    `json:"pid"`
-	RSSKB   int    `json:"rss_kb"`
-	Command string `json:"command"`
-	Args    string `json:"args"`
+	PID        int     `json:"pid"`
+	CPUPercent float64 `json:"cpuPercent"`
+	RSSKb      int64   `json:"rssKb"`
+	VSZKb      int64   `json:"vszKb"`
 }
 
 type watchProgramMemoryScriptResult struct {
-	OK         bool                              `json:"ok"`
-	Timestamp  string                            `json:"timestamp"`
-	Program    string                            `json:"program"`
-	MatchCount int                               `json:"match_count"`
-	TotalRSSKB int                               `json:"total_rss_kb"`
-	Processes  []watchProgramMemoryScriptProcess `json:"processes"`
+	OK           bool                              `json:"ok"`
+	Timestamp    string                            `json:"timestamp"`
+	ProcessName  string                            `json:"processName"`
+	MatchedCount int                               `json:"matchedCount"`
+	Processes    []watchProgramMemoryScriptProcess `json:"processes"`
 }
 
 type watchProgramMemoryStructuredProcess struct {
-	PID     int    `json:"pid"`
-	RSSKB   int    `json:"rssKb"`
-	Command string `json:"command"`
-	Args    string `json:"args"`
+	PID        int     `json:"pid"`
+	CPUPercent float64 `json:"cpuPercent"`
+	RSSKb      int64   `json:"rssKb"`
+	VSZKb      int64   `json:"vszKb"`
 }
 
 type watchProgramMemoryStructuredResult struct {
-	OK         bool                                  `json:"ok"`
-	Timestamp  string                                `json:"timestamp"`
-	Program    string                                `json:"program"`
-	MatchCount int                                   `json:"matchCount"`
-	TotalRSSKB int                                   `json:"totalRssKb"`
-	Processes  []watchProgramMemoryStructuredProcess `json:"processes"`
+	OK           bool                                  `json:"ok"`
+	Timestamp    string                                `json:"timestamp"`
+	ProcessName  string                                `json:"processName"`
+	MatchedCount int                                   `json:"matchedCount"`
+	Processes    []watchProgramMemoryStructuredProcess `json:"processes"`
 }
 
 type server struct {
@@ -401,7 +420,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools for dependency inspection, git analytics, docker image metadata, multi-repo status scans, and process memory snapshots. High-risk shell utilities are intentionally not exposed.",
+		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, docker_show_images_arch, and watch_program_memory for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -527,17 +546,20 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 			},
 		},
 		map[string]interface{}{
-			"name":        "docker_show_images_arch",
-			"title":       "Show Docker Image Architectures",
-			"description": "Run the repository's docker-show-images-arch CLI and return image architecture details as structured data.",
+			"name":        "git_find_large_files",
+			"title":       "Find Large Git Blob Objects",
+			"description": "Run the repository's git-find-large-files CLI and return tracked blob objects ordered by size.",
 			"inputSchema": map[string]interface{}{
 				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]interface{}{
-					"images": map[string]interface{}{
-						"type":        "array",
-						"description": "Optional image references to inspect. Defaults to all local images.",
-						"items":       map[string]interface{}{"type": "string"},
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Repository directory to inspect. Defaults to the current directory.",
+					},
+					"limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum number of results to return. Defaults to 0 for no limit.",
 					},
 					"workingDirectory": map[string]interface{}{
 						"type":        "string",
@@ -548,26 +570,30 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 			"outputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"ok": map[string]interface{}{"type": "boolean"},
-					"images": map[string]interface{}{
+					"ok":            map[string]interface{}{"type": "boolean"},
+					"directory":     map[string]interface{}{"type": "string"},
+					"limit":         map[string]interface{}{"type": "integer"},
+					"totalCount":    map[string]interface{}{"type": "integer"},
+					"returnedCount": map[string]interface{}{"type": "integer"},
+					"truncated":     map[string]interface{}{"type": "boolean"},
+					"files": map[string]interface{}{
 						"type": "array",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
-								"id":           map[string]interface{}{"type": "string"},
-								"repoTags":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-								"architecture": map[string]interface{}{"type": "string"},
-								"os":           map[string]interface{}{"type": "string"},
-								"variant":      map[string]interface{}{"type": "string"},
+								"objectId":  map[string]interface{}{"type": "string"},
+								"path":      map[string]interface{}{"type": "string"},
+								"sizeBytes": map[string]interface{}{"type": "integer"},
+								"sizeHuman": map[string]interface{}{"type": "string"},
 							},
-							"required": []string{"id", "repoTags", "architecture", "os", "variant"},
+							"required": []string{"objectId", "path", "sizeBytes", "sizeHuman"},
 						},
 					},
 				},
-				"required": []string{"ok", "images"},
+				"required": []string{"ok", "directory", "limit", "totalCount", "returnedCount", "truncated", "files"},
 			},
 			"annotations": map[string]interface{}{
-				"title":           "Docker image architectures",
+				"title":           "Git large files",
 				"readOnlyHint":    true,
 				"destructiveHint": false,
 				"idempotentHint":  true,
@@ -576,8 +602,8 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 		},
 		map[string]interface{}{
 			"name":        "git_status_subdirs",
-			"title":       "Scan Git Repositories Under a Directory",
-			"description": "Run the repository's git-status-subdir CLI and summarize branch and working tree state for nested repositories.",
+			"title":       "Inspect Git Repositories Under a Directory",
+			"description": "Run the repository's git-status-subdir CLI and return child repository branches and porcelain status.",
 			"inputSchema": map[string]interface{}{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -588,7 +614,7 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 					},
 					"depth": map[string]interface{}{
 						"type":        "integer",
-						"description": "Max directory depth to scan for nested repositories. Defaults to 2.",
+						"description": "Maximum directory depth to scan for child repositories. Defaults to 2.",
 					},
 					"workingDirectory": map[string]interface{}{
 						"type":        "string",
@@ -607,26 +633,60 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
-								"path":            map[string]interface{}{"type": "string"},
-								"relativePath":    map[string]interface{}{"type": "string"},
-								"branch":          map[string]interface{}{"type": "string"},
-								"upstream":        map[string]interface{}{"type": "string"},
-								"ahead":           map[string]interface{}{"type": "integer"},
-								"behind":          map[string]interface{}{"type": "integer"},
-								"stagedCount":     map[string]interface{}{"type": "integer"},
-								"unstagedCount":   map[string]interface{}{"type": "integer"},
-								"untrackedCount":  map[string]interface{}{"type": "integer"},
-								"conflictedCount": map[string]interface{}{"type": "integer"},
-								"clean":           map[string]interface{}{"type": "boolean"},
+								"path":      map[string]interface{}{"type": "string"},
+								"branch":    map[string]interface{}{"type": "string"},
+								"isClean":   map[string]interface{}{"type": "boolean"},
+								"porcelain": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 							},
-							"required": []string{"path", "relativePath", "branch", "upstream", "ahead", "behind", "stagedCount", "unstagedCount", "untrackedCount", "conflictedCount", "clean"},
+							"required": []string{"path", "branch", "isClean", "porcelain"},
 						},
 					},
 				},
 				"required": []string{"ok", "directory", "depth", "repositories"},
 			},
 			"annotations": map[string]interface{}{
-				"title":           "Git repo status scan",
+				"title":           "Git subdir status",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
+		map[string]interface{}{
+			"name":        "docker_show_images_arch",
+			"title":       "Inspect Docker Image Architectures",
+			"description": "Run the repository's docker-show-images-arch CLI and return local image tags and architecture.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{"type": "boolean"},
+					"images": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"id":           map[string]interface{}{"type": "string"},
+								"repoTags":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+								"architecture": map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"id", "repoTags", "architecture"},
+						},
+					},
+				},
+				"required": []string{"ok", "images"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Docker image arch",
 				"readOnlyHint":    true,
 				"destructiveHint": false,
 				"idempotentHint":  true,
@@ -635,53 +695,52 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 		},
 		map[string]interface{}{
 			"name":        "watch_program_memory",
-			"title":       "Sample Program Memory",
-			"description": "Run the repository's watch-prog-memory CLI and return RSS memory totals for matching processes.",
+			"title":       "Sample Program Memory and CPU",
+			"description": "Run the repository's watch-prog-memory CLI and return a one-shot process resource sample.",
 			"inputSchema": map[string]interface{}{
 				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]interface{}{
-					"program": map[string]interface{}{
+					"processName": map[string]interface{}{
 						"type":        "string",
-						"description": "Program name or substring pattern to match.",
+						"description": "Process name to match exactly with pgrep -x.",
 					},
 					"workingDirectory": map[string]interface{}{
 						"type":        "string",
 						"description": "Optional working directory for launching the underlying script.",
 					},
 				},
-				"required": []string{"program"},
+				"required": []string{"processName"},
 			},
 			"outputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"ok":         map[string]interface{}{"type": "boolean"},
-					"timestamp":  map[string]interface{}{"type": "string"},
-					"program":    map[string]interface{}{"type": "string"},
-					"matchCount": map[string]interface{}{"type": "integer"},
-					"totalRssKb": map[string]interface{}{"type": "integer"},
+					"ok":           map[string]interface{}{"type": "boolean"},
+					"timestamp":    map[string]interface{}{"type": "string"},
+					"processName":  map[string]interface{}{"type": "string"},
+					"matchedCount": map[string]interface{}{"type": "integer"},
 					"processes": map[string]interface{}{
 						"type": "array",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
-								"pid":     map[string]interface{}{"type": "integer"},
-								"rssKb":   map[string]interface{}{"type": "integer"},
-								"command": map[string]interface{}{"type": "string"},
-								"args":    map[string]interface{}{"type": "string"},
+								"pid":        map[string]interface{}{"type": "integer"},
+								"cpuPercent": map[string]interface{}{"type": "number"},
+								"rssKb":      map[string]interface{}{"type": "integer"},
+								"vszKb":      map[string]interface{}{"type": "integer"},
 							},
-							"required": []string{"pid", "rssKb", "command", "args"},
+							"required": []string{"pid", "cpuPercent", "rssKb", "vszKb"},
 						},
 					},
 				},
-				"required": []string{"ok", "timestamp", "program", "matchCount", "totalRssKb", "processes"},
+				"required": []string{"ok", "timestamp", "processName", "matchedCount", "processes"},
 			},
 			"annotations": map[string]interface{}{
-				"title":           "Program memory sample",
+				"title":           "Program memory watch",
 				"readOnlyHint":    true,
 				"destructiveHint": false,
 				"idempotentHint":  true,
-				"openWorldHint":   true,
+				"openWorldHint":   false,
 			},
 		},
 	}
@@ -788,6 +847,88 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 				"isError":           false,
 			},
 		})
+	case "git_find_large_files":
+		result, err := runGitFindLargeFiles(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "git_status_subdirs":
+		result, err := runGitStatusSubdirs(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
 	case "docker_show_images_arch":
 		result, err := runDockerShowImagesArch(params.Arguments)
 		if err != nil {
@@ -796,7 +937,10 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 				ID:      rawIDToValue(req.ID),
 				Result: map[string]interface{}{
 					"content": []interface{}{
-						map[string]interface{}{"type": "text", "text": err.Error()},
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
 					},
 					"isError": true,
 				},
@@ -816,40 +960,12 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 			JSONRPC: "2.0",
 			ID:      rawIDToValue(req.ID),
 			Result: map[string]interface{}{
-				"content":           []interface{}{map[string]interface{}{"type": "text", "text": string(pretty)}},
-				"structuredContent": result,
-				"isError":           false,
-			},
-		})
-	case "git_status_subdirs":
-		result, err := runGitStatusSubdir(params.Arguments)
-		if err != nil {
-			return marshalResponse(responseEnvelope{
-				JSONRPC: "2.0",
-				ID:      rawIDToValue(req.ID),
-				Result: map[string]interface{}{
-					"content": []interface{}{
-						map[string]interface{}{"type": "text", "text": err.Error()},
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
 					},
-					"isError": true,
 				},
-			})
-		}
-
-		pretty, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return marshalResponse(responseEnvelope{
-				JSONRPC: "2.0",
-				ID:      rawIDToValue(req.ID),
-				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
-			})
-		}
-
-		return marshalResponse(responseEnvelope{
-			JSONRPC: "2.0",
-			ID:      rawIDToValue(req.ID),
-			Result: map[string]interface{}{
-				"content":           []interface{}{map[string]interface{}{"type": "text", "text": string(pretty)}},
 				"structuredContent": result,
 				"isError":           false,
 			},
@@ -862,7 +978,10 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 				ID:      rawIDToValue(req.ID),
 				Result: map[string]interface{}{
 					"content": []interface{}{
-						map[string]interface{}{"type": "text", "text": err.Error()},
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
 					},
 					"isError": true,
 				},
@@ -882,7 +1001,12 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 			JSONRPC: "2.0",
 			ID:      rawIDToValue(req.ID),
 			Result: map[string]interface{}{
-				"content":           []interface{}{map[string]interface{}{"type": "text", "text": string(pretty)}},
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
 				"structuredContent": result,
 				"isError":           false,
 			},
@@ -1111,6 +1235,203 @@ func parseGitCountLineOptions(arguments map[string]interface{}) (gitCountLineOpt
 	return options, nil
 }
 
+func runGitFindLargeFiles(arguments map[string]interface{}) (gitFindLargeFilesStructuredResult, error) {
+	options, err := parseGitFindLargeFilesOptions(arguments)
+	if err != nil {
+		return gitFindLargeFilesStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_FIND_LARGE_FILES_SCRIPT", "git-find-large-files.sh")
+	if err != nil {
+		return gitFindLargeFilesStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--directory", options.Directory,
+		"--limit", strconv.Itoa(options.Limit),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitFindLargeFilesStructuredResult{}, fmt.Errorf("git_find_large_files failed: %s", stderrText)
+		}
+		return gitFindLargeFilesStructuredResult{}, fmt.Errorf("git_find_large_files execution failed: %w", err)
+	}
+
+	var parsed gitFindLargeFilesScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitFindLargeFilesStructuredResult{}, fmt.Errorf("invalid JSON from git-find-large-files script: %w", err)
+	}
+
+	files := make([]gitFindLargeFilesStructuredFile, 0, len(parsed.Files))
+	for _, file := range parsed.Files {
+		files = append(files, gitFindLargeFilesStructuredFile{
+			ObjectID:  file.ObjectID,
+			Path:      file.Path,
+			SizeBytes: file.SizeBytes,
+			SizeHuman: file.SizeHuman,
+		})
+	}
+
+	return gitFindLargeFilesStructuredResult{
+		OK:            parsed.OK,
+		Directory:     parsed.Directory,
+		Limit:         parsed.Limit,
+		TotalCount:    parsed.TotalCount,
+		ReturnedCount: parsed.ReturnedCount,
+		Truncated:     parsed.Truncated,
+		Files:         files,
+	}, nil
+}
+
+func parseGitFindLargeFilesOptions(arguments map[string]interface{}) (gitFindLargeFilesOptions, error) {
+	options := gitFindLargeFilesOptions{
+		Directory: ".",
+		Limit:     0,
+	}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "limit"); ok {
+		intValue, err := toInt(value)
+		if err != nil || intValue < 0 {
+			return options, fmt.Errorf("limit must be a non-negative integer")
+		}
+		options.Limit = intValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
+func runGitStatusSubdirs(arguments map[string]interface{}) (gitStatusSubdirsStructuredResult, error) {
+	options, err := parseGitStatusSubdirsOptions(arguments)
+	if err != nil {
+		return gitStatusSubdirsStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_GIT_STATUS_SUBDIR_SCRIPT", "git-status-subdir.sh")
+	if err != nil {
+		return gitStatusSubdirsStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--directory", options.Directory,
+		"--depth", strconv.Itoa(options.Depth),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return gitStatusSubdirsStructuredResult{}, fmt.Errorf("git_status_subdirs failed: %s", stderrText)
+		}
+		return gitStatusSubdirsStructuredResult{}, fmt.Errorf("git_status_subdirs execution failed: %w", err)
+	}
+
+	var parsed gitStatusSubdirsScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return gitStatusSubdirsStructuredResult{}, fmt.Errorf("invalid JSON from git-status-subdir script: %w", err)
+	}
+
+	repositories := make([]gitStatusSubdirsStructuredRepository, 0, len(parsed.Repositories))
+	for _, repository := range parsed.Repositories {
+		repositories = append(repositories, gitStatusSubdirsStructuredRepository{
+			Path:      repository.Path,
+			Branch:    repository.Branch,
+			IsClean:   repository.IsClean,
+			Porcelain: repository.Porcelain,
+		})
+	}
+
+	return gitStatusSubdirsStructuredResult{
+		OK:           parsed.OK,
+		Directory:    parsed.Directory,
+		Depth:        parsed.Depth,
+		Repositories: repositories,
+	}, nil
+}
+
+func parseGitStatusSubdirsOptions(arguments map[string]interface{}) (gitStatusSubdirsOptions, error) {
+	options := gitStatusSubdirsOptions{
+		Directory: ".",
+		Depth:     2,
+	}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "depth"); ok {
+		intValue, err := toInt(value)
+		if err != nil || intValue < 0 {
+			return options, fmt.Errorf("depth must be a non-negative integer")
+		}
+		options.Depth = intValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
+	}
+
+	return options, nil
+}
+
 func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImagesArchStructuredResult, error) {
 	options, err := parseDockerShowImagesArchOptions(arguments)
 	if err != nil {
@@ -1122,8 +1443,10 @@ func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImages
 		return dockerShowImagesArchStructuredResult{}, err
 	}
 
-	args := []string{scriptPath, "--json"}
-	args = append(args, options.Images...)
+	args := []string{
+		scriptPath,
+		"--json",
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1157,8 +1480,6 @@ func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImages
 			ID:           image.ID,
 			RepoTags:     image.RepoTags,
 			Architecture: image.Architecture,
-			OS:           image.OS,
-			Variant:      image.Variant,
 		})
 	}
 
@@ -1170,17 +1491,11 @@ func runDockerShowImagesArch(arguments map[string]interface{}) (dockerShowImages
 
 func parseDockerShowImagesArchOptions(arguments map[string]interface{}) (dockerShowImagesArchOptions, error) {
 	options := dockerShowImagesArchOptions{}
+
 	if len(arguments) == 0 {
 		return options, nil
 	}
 
-	if value, ok := arguments["images"]; ok {
-		images, err := toStringSlice(value)
-		if err != nil {
-			return options, fmt.Errorf("images must be a string or array of strings")
-		}
-		options.Images = images
-	}
 	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
 		stringValue, ok := value.(string)
 		if !ok {
@@ -1188,102 +1503,7 @@ func parseDockerShowImagesArchOptions(arguments map[string]interface{}) (dockerS
 		}
 		options.WorkingDirectory = stringValue
 	}
-	return options, nil
-}
 
-func runGitStatusSubdir(arguments map[string]interface{}) (gitStatusSubdirStructuredResult, error) {
-	options, err := parseGitStatusSubdirOptions(arguments)
-	if err != nil {
-		return gitStatusSubdirStructuredResult{}, err
-	}
-
-	scriptPath, err := resolveShellScript("SUSS_GIT_STATUS_SUBDIR_SCRIPT", "git-status-subdir.sh")
-	if err != nil {
-		return gitStatusSubdirStructuredResult{}, err
-	}
-
-	args := []string{scriptPath, "--json", "--directory", options.Directory, "--depth", strconv.Itoa(options.Depth)}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "bash", args...)
-	if options.WorkingDirectory != "" {
-		cmd.Dir = options.WorkingDirectory
-	}
-
-	output, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			stderrText := strings.TrimSpace(string(exitErr.Stderr))
-			if stderrText == "" {
-				stderrText = exitErr.Error()
-			}
-			return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdirs failed: %s", stderrText)
-		}
-		return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdirs execution failed: %w", err)
-	}
-
-	var parsed gitStatusSubdirScriptResult
-	if err := json.Unmarshal(output, &parsed); err != nil {
-		return gitStatusSubdirStructuredResult{}, fmt.Errorf("invalid JSON from git-status-subdir script: %w", err)
-	}
-
-	repositories := make([]gitStatusSubdirStructuredRepository, 0, len(parsed.Repositories))
-	for _, repo := range parsed.Repositories {
-		repositories = append(repositories, gitStatusSubdirStructuredRepository{
-			Path:            repo.Path,
-			RelativePath:    repo.RelativePath,
-			Branch:          repo.Branch,
-			Upstream:        repo.Upstream,
-			Ahead:           repo.Ahead,
-			Behind:          repo.Behind,
-			StagedCount:     repo.StagedCount,
-			UnstagedCount:   repo.UnstagedCount,
-			UntrackedCount:  repo.UntrackedCount,
-			ConflictedCount: repo.ConflictedCount,
-			Clean:           repo.Clean,
-		})
-	}
-
-	return gitStatusSubdirStructuredResult{
-		OK:           parsed.OK,
-		Directory:    parsed.Directory,
-		Depth:        parsed.Depth,
-		Repositories: repositories,
-	}, nil
-}
-
-func parseGitStatusSubdirOptions(arguments map[string]interface{}) (gitStatusSubdirOptions, error) {
-	options := gitStatusSubdirOptions{
-		Directory: ".",
-		Depth:     2,
-	}
-	if len(arguments) == 0 {
-		return options, nil
-	}
-	if value, ok := firstValue(arguments, "directory"); ok {
-		stringValue, ok := value.(string)
-		if !ok || stringValue == "" {
-			return options, fmt.Errorf("directory must be a non-empty string")
-		}
-		options.Directory = stringValue
-	}
-	if value, ok := firstValue(arguments, "depth"); ok {
-		intValue, err := toInt(value)
-		if err != nil || intValue < 0 {
-			return options, fmt.Errorf("depth must be a non-negative integer")
-		}
-		options.Depth = intValue
-	}
-	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
-		stringValue, ok := value.(string)
-		if !ok {
-			return options, fmt.Errorf("workingDirectory must be a string")
-		}
-		options.WorkingDirectory = stringValue
-	}
 	return options, nil
 }
 
@@ -1293,12 +1513,16 @@ func runWatchProgramMemory(arguments map[string]interface{}) (watchProgramMemory
 		return watchProgramMemoryStructuredResult{}, err
 	}
 
-	scriptPath, err := resolveShellScript("SUSS_WATCH_PROGRAM_MEMORY_SCRIPT", "watch-prog-memory.sh")
+	scriptPath, err := resolveShellScript("SUSS_WATCH_PROG_MEMORY_SCRIPT", "watch-prog-memory.sh")
 	if err != nil {
 		return watchProgramMemoryStructuredResult{}, err
 	}
 
-	args := []string{scriptPath, "--json", "--program", options.Program}
+	args := []string{
+		scriptPath,
+		"--json",
+		"--process-name", options.ProcessName,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1329,34 +1553,35 @@ func runWatchProgramMemory(arguments map[string]interface{}) (watchProgramMemory
 	processes := make([]watchProgramMemoryStructuredProcess, 0, len(parsed.Processes))
 	for _, process := range parsed.Processes {
 		processes = append(processes, watchProgramMemoryStructuredProcess{
-			PID:     process.PID,
-			RSSKB:   process.RSSKB,
-			Command: process.Command,
-			Args:    process.Args,
+			PID:        process.PID,
+			CPUPercent: process.CPUPercent,
+			RSSKb:      process.RSSKb,
+			VSZKb:      process.VSZKb,
 		})
 	}
 
 	return watchProgramMemoryStructuredResult{
-		OK:         parsed.OK,
-		Timestamp:  parsed.Timestamp,
-		Program:    parsed.Program,
-		MatchCount: parsed.MatchCount,
-		TotalRSSKB: parsed.TotalRSSKB,
-		Processes:  processes,
+		OK:           parsed.OK,
+		Timestamp:    parsed.Timestamp,
+		ProcessName:  parsed.ProcessName,
+		MatchedCount: parsed.MatchedCount,
+		Processes:    processes,
 	}, nil
 }
 
 func parseWatchProgramMemoryOptions(arguments map[string]interface{}) (watchProgramMemoryOptions, error) {
 	options := watchProgramMemoryOptions{}
+
 	if len(arguments) == 0 {
-		return options, fmt.Errorf("program is required")
+		return options, fmt.Errorf("processName is required")
 	}
-	if value, ok := firstValue(arguments, "program"); ok {
+
+	if value, ok := firstValue(arguments, "processName", "process_name"); ok {
 		stringValue, ok := value.(string)
 		if !ok || stringValue == "" {
-			return options, fmt.Errorf("program must be a non-empty string")
+			return options, fmt.Errorf("processName must be a non-empty string")
 		}
-		options.Program = stringValue
+		options.ProcessName = stringValue
 	}
 	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
 		stringValue, ok := value.(string)
@@ -1365,9 +1590,11 @@ func parseWatchProgramMemoryOptions(arguments map[string]interface{}) (watchProg
 		}
 		options.WorkingDirectory = stringValue
 	}
-	if options.Program == "" {
-		return options, fmt.Errorf("program is required")
+
+	if options.ProcessName == "" {
+		return options, fmt.Errorf("processName is required")
 	}
+
 	return options, nil
 }
 

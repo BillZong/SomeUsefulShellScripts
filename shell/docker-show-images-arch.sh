@@ -10,43 +10,62 @@ PROGRAM_NAME=$(basename "$0")
 
 usage() {
     cat <<EOF
-Usage: $PROGRAM_NAME [options] [IMAGE...]
+Usage: $PROGRAM_NAME [options]
 
-Show docker image architecture details for one or more images.
+Inspect local Docker images and report repository tags and architecture.
 
 Options:
-  -h, --help                  Show this help message.
-  -j, --json                  Print a JSON document instead of plain text.
+  -h, --help    Show this help message.
+  -j, --json    Print a JSON document instead of plain text.
 
 Examples:
   $PROGRAM_NAME
-  $PROGRAM_NAME alpine:latest
-  $PROGRAM_NAME --json ubuntu:24.04 busybox
+  $PROGRAM_NAME --json
 EOF
 }
 
-json_array_from_csv() {
-    local csv=$1
+normalize_repo_tags_json() {
+    local value=$1
+
+    if [ "$value" = "null" ]; then
+        printf '[]'
+        return
+    fi
+
+    printf '%s' "$value"
+}
+
+json_print_images() {
+    local file=$1
     local first=1
-    local item
+    local image_id repo_tags_json architecture escaped_id escaped_architecture
 
     printf '['
-    OLD_IFS=$IFS
-    IFS=','
-    for item in $csv; do
-        [ -n "$item" ] || continue
+    while IFS=$'\t' read -r image_id repo_tags_json architecture; do
+        [ -n "$image_id" ] || continue
+        escaped_id=$(suss_json_escape "$image_id")
+        escaped_architecture=$(suss_json_escape "$architecture")
+        repo_tags_json=$(normalize_repo_tags_json "$repo_tags_json")
+
         if [ $first -eq 0 ]; then
             printf ','
         fi
-        printf '"%s"' "$(suss_json_escape "$item")"
+
+        printf '\n    {'
+        printf '"id":"%s",' "$escaped_id"
+        printf '"repoTags":%s,' "$repo_tags_json"
+        printf '"architecture":"%s"' "$escaped_architecture"
+        printf '}'
         first=0
-    done
-    IFS=$OLD_IFS
+    done < "$file"
+
+    if [ $first -eq 0 ]; then
+        printf '\n  '
+    fi
     printf ']'
 }
 
 JSON_OUTPUT=0
-IMAGES=()
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -60,73 +79,58 @@ while [ "$#" -gt 0 ]; do
             ;;
         --)
             shift
-            while [ "$#" -gt 0 ]; do
-                IMAGES+=("$1")
-                shift
-            done
+            [ "$#" -eq 0 ] || suss_die "$PROGRAM_NAME" "unexpected positional arguments: $*"
             break
             ;;
         -*)
             suss_die "$PROGRAM_NAME" "unknown option: $1"
             ;;
         *)
-            IMAGES+=("$1")
-            shift
+            suss_die "$PROGRAM_NAME" "unexpected positional argument: $1"
             ;;
     esac
 done
 
 suss_require_command "docker" "$PROGRAM_NAME"
 
-if [ "${#IMAGES[@]}" -eq 0 ]; then
-    while IFS= read -r image_id; do
-        [ -n "$image_id" ] || continue
-        IMAGES+=("$image_id")
-    done < <(docker image ls -q | awk '!seen[$0]++')
-fi
+TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/docker-show-images-arch.XXXXXX")
+trap 'rm -rf "$TMP_DIR"' EXIT
 
-if [ "${#IMAGES[@]}" -eq 0 ]; then
-    if [ "$JSON_OUTPUT" -eq 1 ]; then
-        printf '{\n'
-        printf '  "ok": true,\n'
-        printf '  "images": []\n'
-        printf '}\n'
-        exit 0
-    fi
-    printf 'no images found\n'
-    exit 0
-fi
+IMAGE_IDS_FILE="$TMP_DIR/image-ids.txt"
+RESULTS_FILE="$TMP_DIR/results.tsv"
+DOCKER_STDERR_FILE="$TMP_DIR/docker.stderr"
 
-INSPECT_FILE=$(mktemp "${TMPDIR:-/tmp}/docker-show-images-arch.XXXXXX")
-trap 'rm -f "$INSPECT_FILE"' EXIT
+docker image ls --no-trunc --quiet > "$IMAGE_IDS_FILE" 2> "$DOCKER_STDERR_FILE" \
+    || suss_die "$PROGRAM_NAME" "$(tr '\n' ' ' < "$DOCKER_STDERR_FILE" | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
 
-docker image inspect --format '{{.Id}}\t{{json .RepoTags}}\t{{.Architecture}}\t{{.Os}}\t{{.Variant}}' "${IMAGES[@]}" > "$INSPECT_FILE"
+LC_ALL=C sort -u "$IMAGE_IDS_FILE" -o "$IMAGE_IDS_FILE"
+: > "$RESULTS_FILE"
+
+while IFS= read -r image_id; do
+    [ -n "$image_id" ] || continue
+
+    inspect_output=$(docker image inspect --format '{{.ID}}{{printf "\t"}}{{json .RepoTags}}{{printf "\t"}}{{.Architecture}}' "$image_id" 2> "$DOCKER_STDERR_FILE") \
+        || suss_die "$PROGRAM_NAME" "$(tr '\n' ' ' < "$DOCKER_STDERR_FILE" | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')"
+
+    printf '%s\n' "$inspect_output" >> "$RESULTS_FILE"
+done < "$IMAGE_IDS_FILE"
 
 if [ "$JSON_OUTPUT" -eq 1 ]; then
     printf '{\n'
     printf '  "ok": true,\n'
-    printf '  "images": [\n'
-    first=1
-    while IFS=$'\t' read -r image_id repo_tags architecture os_name variant; do
-        [ -n "$image_id" ] || continue
-        if [ $first -eq 0 ]; then
-            printf ',\n'
-        fi
-        printf '    {\n'
-        printf '      "id": "%s",\n' "$(suss_json_escape "$image_id")"
-        printf '      "repo_tags": %s,\n' "${repo_tags:-[]}"
-        printf '      "architecture": "%s",\n' "$(suss_json_escape "$architecture")"
-        printf '      "os": "%s",\n' "$(suss_json_escape "$os_name")"
-        printf '      "variant": "%s"\n' "$(suss_json_escape "$variant")"
-        printf '    }'
-        first=0
-    done < "$INSPECT_FILE"
-    printf '\n  ]\n'
-    printf '}\n'
+    printf '  "images": '
+    json_print_images "$RESULTS_FILE"
+    printf '\n}\n'
     exit 0
 fi
 
-while IFS=$'\t' read -r image_id repo_tags architecture os_name variant; do
+if [ ! -s "$RESULTS_FILE" ]; then
+    printf 'no images found\n'
+    exit 0
+fi
+
+while IFS=$'\t' read -r image_id repo_tags_json architecture; do
     [ -n "$image_id" ] || continue
-    printf '%s\t%s\t%s\t%s\t%s\n' "$image_id" "$repo_tags" "$architecture" "$os_name" "$variant"
-done < "$INSPECT_FILE"
+    repo_tags_json=$(normalize_repo_tags_json "$repo_tags_json")
+    printf '%s\t%s\t%s\n' "$image_id" "$architecture" "$repo_tags_json"
+done < "$RESULTS_FILE"
