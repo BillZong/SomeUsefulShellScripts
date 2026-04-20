@@ -342,7 +342,6 @@ func TestRunWatchProgramMemoryReturnsScriptFailure(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
-
 func TestNegotiateProtocolVersion(t *testing.T) {
 	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
 		t.Fatalf("expected requested supported protocol version, got %s", got)
