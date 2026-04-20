@@ -88,7 +88,7 @@ if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 find "$ROOT_DIR" \
-    -type d -name .git -print \
+    \( -type d -o -type f \) -name .git -print \
     -o \( -path '*/.*' -o -path '*/node_modules' \) -prune \
     | while IFS= read -r git_dir; do
         dirname "$git_dir"

@@ -7,7 +7,7 @@
 - `go_list_dep`
 - `git_count_line`
 - `docker_show_images_arch`
-- `git_status_subdir`
+- `git_status_subdirs`
 - `watch_program_memory`
 
 ## 特点
@@ -190,7 +190,7 @@ openclaw agent \
 - `images[].os`
 - `images[].variant`
 
-## Tool: `git_status_subdir`
+## Tool: `git_status_subdirs`
 
 输入参数：
 

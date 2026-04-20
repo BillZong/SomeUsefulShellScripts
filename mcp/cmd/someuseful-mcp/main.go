@@ -575,7 +575,7 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 			},
 		},
 		map[string]interface{}{
-			"name":        "git_status_subdir",
+			"name":        "git_status_subdirs",
 			"title":       "Scan Git Repositories Under a Directory",
 			"description": "Run the repository's git-status-subdir CLI and summarize branch and working tree state for nested repositories.",
 			"inputSchema": map[string]interface{}{
@@ -821,7 +821,7 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 				"isError":           false,
 			},
 		})
-	case "git_status_subdir":
+	case "git_status_subdirs":
 		result, err := runGitStatusSubdir(params.Arguments)
 		if err != nil {
 			return marshalResponse(responseEnvelope{
@@ -1220,9 +1220,9 @@ func runGitStatusSubdir(arguments map[string]interface{}) (gitStatusSubdirStruct
 			if stderrText == "" {
 				stderrText = exitErr.Error()
 			}
-			return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdir failed: %s", stderrText)
+			return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdirs failed: %s", stderrText)
 		}
-		return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdir execution failed: %w", err)
+		return gitStatusSubdirStructuredResult{}, fmt.Errorf("git_status_subdirs execution failed: %w", err)
 	}
 
 	var parsed gitStatusSubdirScriptResult
