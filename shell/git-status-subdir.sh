@@ -76,6 +76,23 @@ json_print_repositories() {
     printf ']'
 }
 
+resolve_branch_name() {
+    local repo_path=$1
+    local branch
+
+    if branch=$(git -C "$repo_path" symbolic-ref --quiet --short HEAD 2>/dev/null); then
+        printf '%s\n' "$branch"
+        return 0
+    fi
+
+    if branch=$(git -C "$repo_path" rev-parse --abbrev-ref HEAD 2>/dev/null); then
+        printf '%s\n' "$branch"
+        return 0
+    fi
+
+    return 1
+}
+
 JSON_OUTPUT=0
 DIRECTORY="."
 DEPTH=2
@@ -149,7 +166,7 @@ repo_index=0
 while IFS= read -r repo_path; do
     [ -n "$repo_path" ] || continue
 
-    branch=$(git -C "$repo_path" rev-parse --abbrev-ref HEAD) \
+    branch=$(resolve_branch_name "$repo_path") \
         || suss_die "$PROGRAM_NAME" "failed to resolve branch for repository: $repo_path"
 
     porcelain_file="$TMP_DIR/porcelain-${repo_index}.txt"
