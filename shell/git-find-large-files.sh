@@ -138,8 +138,8 @@ collect_blob_results() {
 $metadata
 EOF
 
-        [ "$object_type" = "blob" ] || continue
         IFS= read -r -d '' path <&3 || suss_die "$PROGRAM_NAME" "missing path for object id: $object_id"
+        [ "$object_type" = "blob" ] || continue
         path_base64=$(encode_base64 "$path")
         printf '%s\t%s\t%s\n' "$object_id" "$size_bytes" "$path_base64" >> "$output_file"
     done < <(git -C "$directory" cat-file --batch-check='%(objectname) %(objecttype) %(objectsize)' -Z < "$object_ids_file")

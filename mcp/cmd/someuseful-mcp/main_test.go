@@ -343,6 +343,135 @@ func TestRunWatchProgramMemoryReturnsScriptFailure(t *testing.T) {
 	}
 }
 
+func TestHandleToolsCallWatchProgramMemorySuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	scriptPath := filepath.Join(tempDir, "watch-prog-memory.sh")
+	script := "#!/usr/bin/env bash\ncat <<'EOF'\n{\"ok\":true,\"timestamp\":\"2026-04-20T12:00:00+0800\",\"processName\":\"demo\",\"matchedCount\":1,\"processes\":[{\"pid\":123,\"cpuPercent\":1.5,\"rssKb\":2048,\"vszKb\":4096}]}\nEOF\n"
+
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	t.Setenv("SUSS_WATCH_PROG_MEMORY_SCRIPT", scriptPath)
+
+	requestParams, err := json.Marshal(toolCallParams{
+		Name: "watch_program_memory",
+		Arguments: map[string]interface{}{
+			"processName": "demo",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal tool call params: %v", err)
+	}
+
+	srv := &server{}
+	response, ok := srv.handleToolsCall(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Params:  requestParams,
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsCall to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			IsError           bool `json:"isError"`
+			StructuredContent struct {
+				ProcessName  string `json:"processName"`
+				MatchedCount int    `json:"matchedCount"`
+				Processes    []struct {
+					PID        int     `json:"pid"`
+					CPUPercent float64 `json:"cpuPercent"`
+					RSSKb      int64   `json:"rssKb"`
+					VSZKb      int64   `json:"vszKb"`
+				} `json:"processes"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("decode tool call response: %v", err)
+	}
+
+	if decoded.Result.IsError {
+		t.Fatalf("expected successful tool response")
+	}
+	if decoded.Result.StructuredContent.ProcessName != "demo" {
+		t.Fatalf("unexpected process name: %s", decoded.Result.StructuredContent.ProcessName)
+	}
+	if decoded.Result.StructuredContent.MatchedCount != 1 {
+		t.Fatalf("unexpected matched count: %d", decoded.Result.StructuredContent.MatchedCount)
+	}
+	if len(decoded.Result.StructuredContent.Processes) != 1 {
+		t.Fatalf("unexpected processes: %#v", decoded.Result.StructuredContent.Processes)
+	}
+	process := decoded.Result.StructuredContent.Processes[0]
+	if process.PID != 123 || process.CPUPercent != 1.5 || process.RSSKb != 2048 || process.VSZKb != 4096 {
+		t.Fatalf("unexpected process mapping: %#v", process)
+	}
+}
+
+func TestParseDuDirectoryOptionsDefaults(t *testing.T) {
+	options, err := parseDuDirectoryOptions(nil)
+	if err != nil {
+		t.Fatalf("parseDuDirectoryOptions returned error: %v", err)
+	}
+
+	if options.Directory != "." {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.WorkingDirectory != "" {
+		t.Fatalf("expected empty working directory, got: %s", options.WorkingDirectory)
+	}
+}
+
+func TestParseDuDirectoryOptionsAliases(t *testing.T) {
+	options, err := parseDuDirectoryOptions(map[string]interface{}{
+		"directory":         "/tmp/workspace",
+		"working_directory": "/tmp",
+	})
+	if err != nil {
+		t.Fatalf("parseDuDirectoryOptions returned error: %v", err)
+	}
+
+	if options.Directory != "/tmp/workspace" {
+		t.Fatalf("unexpected directory: %s", options.Directory)
+	}
+	if options.WorkingDirectory != "/tmp" {
+		t.Fatalf("unexpected working directory: %s", options.WorkingDirectory)
+	}
+}
+
+func TestHandleToolsListIncludesDuDirectory(t *testing.T) {
+	srv := &server{}
+
+	response, ok := srv.handleToolsList(requestEnvelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+	})
+	if !ok {
+		t.Fatalf("expected handleToolsList to return a response")
+	}
+
+	var decoded struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatalf("failed to decode tools/list response: %v", err)
+	}
+
+	for _, tool := range decoded.Result.Tools {
+		if tool.Name == "du_directory" {
+			return
+		}
+	}
+
+	t.Fatalf("du_directory not found in tools/list response")
+}
 func TestNegotiateProtocolVersion(t *testing.T) {
 	if got := negotiateProtocolVersion("2024-11-05"); got != "2024-11-05" {
 		t.Fatalf("expected requested supported protocol version, got %s", got)
