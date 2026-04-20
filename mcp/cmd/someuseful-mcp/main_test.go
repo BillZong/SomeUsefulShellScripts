@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -317,6 +320,27 @@ func TestHandleToolsListIncludesWatchProgramMemory(t *testing.T) {
 	}
 
 	t.Fatalf("watch_program_memory not found in tools/list response")
+}
+
+func TestRunWatchProgramMemoryReturnsScriptFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	scriptPath := filepath.Join(tempDir, "watch-prog-memory.sh")
+
+	if err := os.WriteFile(scriptPath, []byte("#!/usr/bin/env bash\nprintf 'boom\\n' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+
+	t.Setenv("SUSS_WATCH_PROG_MEMORY_SCRIPT", scriptPath)
+
+	_, err := runWatchProgramMemory(map[string]interface{}{
+		"processName": "demo",
+	})
+	if err == nil {
+		t.Fatalf("expected runWatchProgramMemory to fail")
+	}
+	if !strings.Contains(err.Error(), "watch_program_memory failed: boom") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestNegotiateProtocolVersion(t *testing.T) {
