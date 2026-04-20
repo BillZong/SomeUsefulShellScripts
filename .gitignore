@@ -7,11 +7,15 @@ mcp/cmd/someuseful-mcp/someuseful-mcp
 mcp/cmd/someuseful-mcp/__debug_bin*
 
 # IDE
+.claude/
 .codex/
 .cursor/
 .idea/
 .gemini/
+.omc/
 .opencode/
 .trae/
 .vscode/
 
+.omx/
+.omx/
