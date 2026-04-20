@@ -85,7 +85,7 @@ func commitFixtureFile(t *testing.T, repoDir string, filename string, content st
 	}
 
 	runCommand(t, repoDir, "git", "add", filename)
-	runCommand(t, repoDir, "git", "commit", "-m", "init")
+	runCommand(t, repoDir, "git", "-c", "commit.gpgsign=false", "commit", "-m", "init")
 }
 
 func TestGitStatusSubdirScriptFindsRepoAtExactDepth(t *testing.T) {
@@ -139,5 +139,40 @@ func TestGitStatusSubdirScriptFindsWorktreeGitFile(t *testing.T) {
 	}
 	if !paths[worktreeDir] {
 		t.Fatalf("worktree repository missing from result: %#v", result.Repositories)
+	}
+}
+
+func TestGitStatusSubdirScriptToleratesUnbornRepo(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "root")
+	readyRepoDir := filepath.Join(rootDir, "ready")
+	unbornRepoDir := filepath.Join(rootDir, "unborn")
+
+	if err := os.MkdirAll(readyRepoDir, 0o755); err != nil {
+		t.Fatalf("mkdir ready repo dir: %v", err)
+	}
+	if err := os.MkdirAll(unbornRepoDir, 0o755); err != nil {
+		t.Fatalf("mkdir unborn repo dir: %v", err)
+	}
+
+	runCommand(t, readyRepoDir, "git", "init")
+	commitFixtureFile(t, readyRepoDir, "file.txt", "ready repo\n")
+	runCommand(t, unbornRepoDir, "git", "init")
+
+	result := runGitStatusSubdirScript(t, rootDir, 1)
+	if len(result.Repositories) != 2 {
+		t.Fatalf("expected two repositories, got %#v", result.Repositories)
+	}
+
+	branches := map[string]string{}
+	for _, repository := range result.Repositories {
+		branches[repository.Path] = repository.Branch
+	}
+
+	if branches[readyRepoDir] == "" {
+		t.Fatalf("ready repo missing from result: %#v", result.Repositories)
+	}
+	if branches[unbornRepoDir] == "" {
+		t.Fatalf("unborn repo missing from result: %#v", result.Repositories)
 	}
 }
