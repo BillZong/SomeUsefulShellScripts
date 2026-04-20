@@ -96,6 +96,11 @@ type watchProgramMemoryOptions struct {
 	WorkingDirectory string
 }
 
+type duDirectoryOptions struct {
+	Directory        string
+	WorkingDirectory string
+}
+
 type goListDepScriptResult struct {
 	OK              bool     `json:"ok"`
 	Packages        []string `json:"packages"`
@@ -246,6 +251,30 @@ type watchProgramMemoryStructuredResult struct {
 	ProcessName  string                                `json:"processName"`
 	MatchedCount int                                   `json:"matchedCount"`
 	Processes    []watchProgramMemoryStructuredProcess `json:"processes"`
+}
+
+type duDirectoryScriptEntry struct {
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
+	SizeHuman string `json:"sizeHuman"`
+}
+
+type duDirectoryScriptResult struct {
+	OK        bool                     `json:"ok"`
+	Directory string                   `json:"directory"`
+	Entries   []duDirectoryScriptEntry `json:"entries"`
+}
+
+type duDirectoryStructuredEntry struct {
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
+	SizeHuman string `json:"sizeHuman"`
+}
+
+type duDirectoryStructuredResult struct {
+	OK        bool                         `json:"ok"`
+	Directory string                       `json:"directory"`
+	Entries   []duDirectoryStructuredEntry `json:"entries"`
 }
 
 type server struct {
@@ -420,7 +449,7 @@ func (s *server) handleInitialize(req requestEnvelope) ([]byte, bool) {
 			"version":     serverVersion,
 			"description": "Minimal stdio MCP server for curated local automation tools.",
 		},
-		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, docker_show_images_arch, and watch_program_memory for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
+		"instructions": "Prefer the read-only tools go_list_dep, git_count_line, git_find_large_files, git_status_subdirs, docker_show_images_arch, watch_program_memory, and du_directory for structured repository inspection. High-risk shell utilities are intentionally not exposed yet.",
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -743,6 +772,52 @@ func (s *server) handleToolsList(req requestEnvelope) ([]byte, bool) {
 				"openWorldHint":   false,
 			},
 		},
+		map[string]interface{}{
+			"name":        "du_directory",
+			"title":       "Inspect Directory Sizes",
+			"description": "Run the repository's du-dir CLI and return one directory level of entry sizes.",
+			"inputSchema": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"directory": map[string]interface{}{
+						"type":        "string",
+						"description": "Directory to inspect. Defaults to the current directory.",
+					},
+					"workingDirectory": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory for launching the underlying script.",
+					},
+				},
+			},
+			"outputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"ok":        map[string]interface{}{"type": "boolean"},
+					"directory": map[string]interface{}{"type": "string"},
+					"entries": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"path":      map[string]interface{}{"type": "string"},
+								"sizeBytes": map[string]interface{}{"type": "integer"},
+								"sizeHuman": map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"path", "sizeBytes", "sizeHuman"},
+						},
+					},
+				},
+				"required": []string{"ok", "directory", "entries"},
+			},
+			"annotations": map[string]interface{}{
+				"title":           "Directory usage",
+				"readOnlyHint":    true,
+				"destructiveHint": false,
+				"idempotentHint":  true,
+				"openWorldHint":   false,
+			},
+		},
 	}
 
 	return marshalResponse(responseEnvelope{
@@ -972,6 +1047,47 @@ func (s *server) handleToolsCall(req requestEnvelope) ([]byte, bool) {
 		})
 	case "watch_program_memory":
 		result, err := runWatchProgramMemory(params.Arguments)
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Result: map[string]interface{}{
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": err.Error(),
+						},
+					},
+					"isError": true,
+				},
+			})
+		}
+
+		pretty, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return marshalResponse(responseEnvelope{
+				JSONRPC: "2.0",
+				ID:      rawIDToValue(req.ID),
+				Error:   &rpcError{Code: -32603, Message: "failed to encode tool result", Data: err.Error()},
+			})
+		}
+
+		return marshalResponse(responseEnvelope{
+			JSONRPC: "2.0",
+			ID:      rawIDToValue(req.ID),
+			Result: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "text",
+						"text": string(pretty),
+					},
+				},
+				"structuredContent": result,
+				"isError":           false,
+			},
+		})
+	case "du_directory":
+		result, err := runDuDirectory(params.Arguments)
 		if err != nil {
 			return marshalResponse(responseEnvelope{
 				JSONRPC: "2.0",
@@ -1593,6 +1709,92 @@ func parseWatchProgramMemoryOptions(arguments map[string]interface{}) (watchProg
 
 	if options.ProcessName == "" {
 		return options, fmt.Errorf("processName is required")
+	}
+
+	return options, nil
+}
+
+func runDuDirectory(arguments map[string]interface{}) (duDirectoryStructuredResult, error) {
+	options, err := parseDuDirectoryOptions(arguments)
+	if err != nil {
+		return duDirectoryStructuredResult{}, err
+	}
+
+	scriptPath, err := resolveShellScript("SUSS_DU_DIR_SCRIPT", "du-dir.sh")
+	if err != nil {
+		return duDirectoryStructuredResult{}, err
+	}
+
+	args := []string{
+		scriptPath,
+		"--json",
+		"--directory", options.Directory,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", args...)
+	if options.WorkingDirectory != "" {
+		cmd.Dir = options.WorkingDirectory
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrText := strings.TrimSpace(string(exitErr.Stderr))
+			if stderrText == "" {
+				stderrText = exitErr.Error()
+			}
+			return duDirectoryStructuredResult{}, fmt.Errorf("du_directory failed: %s", stderrText)
+		}
+		return duDirectoryStructuredResult{}, fmt.Errorf("du_directory execution failed: %w", err)
+	}
+
+	var parsed duDirectoryScriptResult
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return duDirectoryStructuredResult{}, fmt.Errorf("invalid JSON from du-dir script: %w", err)
+	}
+
+	entries := make([]duDirectoryStructuredEntry, 0, len(parsed.Entries))
+	for _, entry := range parsed.Entries {
+		entries = append(entries, duDirectoryStructuredEntry{
+			Path:      entry.Path,
+			SizeBytes: entry.SizeBytes,
+			SizeHuman: entry.SizeHuman,
+		})
+	}
+
+	return duDirectoryStructuredResult{
+		OK:        parsed.OK,
+		Directory: parsed.Directory,
+		Entries:   entries,
+	}, nil
+}
+
+func parseDuDirectoryOptions(arguments map[string]interface{}) (duDirectoryOptions, error) {
+	options := duDirectoryOptions{
+		Directory: ".",
+	}
+
+	if len(arguments) == 0 {
+		return options, nil
+	}
+
+	if value, ok := firstValue(arguments, "directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok || stringValue == "" {
+			return options, fmt.Errorf("directory must be a non-empty string")
+		}
+		options.Directory = stringValue
+	}
+	if value, ok := firstValue(arguments, "workingDirectory", "working_directory"); ok {
+		stringValue, ok := value.(string)
+		if !ok {
+			return options, fmt.Errorf("workingDirectory must be a string")
+		}
+		options.WorkingDirectory = stringValue
 	}
 
 	return options, nil

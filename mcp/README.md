@@ -2,7 +2,7 @@
 
 这是当前仓库的最小 MCP 骨架，目标是先把低风险、结构化、可组合的能力挂出来，再逐步扩展更多工具。
 
-当前暴露六个 tool：
+当前暴露七个 tool：
 
 - `go_list_dep`
 - `git_count_line`
@@ -10,6 +10,7 @@
 - `git_status_subdirs`
 - `docker_show_images_arch`
 - `watch_program_memory`
+- `du_directory`
 
 ## 特点
 
@@ -122,6 +123,8 @@ openclaw agent \
   - 显式指定 `docker-show-images-arch.sh` 脚本路径。
 - `SUSS_WATCH_PROG_MEMORY_SCRIPT`
   - 显式指定 `watch-prog-memory.sh` 脚本路径。
+- `SUSS_DU_DIR_SCRIPT`
+  - 显式指定 `du-dir.sh` 脚本路径。
 
 如果这些变量都不传，服务会优先尝试：
 
@@ -257,6 +260,24 @@ openclaw agent \
   - `cpuPercent`
   - `rssKb`
   - `vszKb`
+
+## Tool: `du_directory`
+
+输入参数：
+
+- `directory`
+  - `string`，可选，默认 `"."`
+- `workingDirectory`
+  - `string`，可选，用于指定底层脚本的启动目录
+
+输出：
+
+- `ok`
+- `directory`
+- `entries`
+  - `path`
+  - `sizeBytes`
+  - `sizeHuman`
 
 ## 设计取舍
 

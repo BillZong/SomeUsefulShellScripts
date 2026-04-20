@@ -11,7 +11,9 @@ mcp/cmd/someuseful-mcp/__debug_bin*
 .cursor/
 .idea/
 .gemini/
+.omc/
 .opencode/
 .trae/
 .vscode/
 
+.omx/
