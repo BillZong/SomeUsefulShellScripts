@@ -370,7 +370,9 @@ if [ "$DRY_RUN" -eq 0 ] && [ "$EXECUTE_MODE" -eq 0 ]; then
     emit_error "refusing destructive execution without --dry-run or --execute --yes"
 fi
 
-suss_require_command "gh" "$PROGRAM_NAME"
+if ! command -v gh >/dev/null 2>&1; then
+    emit_error "required command not found: gh"
+fi
 
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gh-delete-oudate-actions.XXXXXX")
 trap 'rm -rf "$TMP_DIR"' EXIT

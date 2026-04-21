@@ -268,6 +268,38 @@ func TestGhDeleteOutdateActionsScriptValidatesRequiredArguments(t *testing.T) {
 	}
 }
 
+func TestGhDeleteOutdateActionsScriptJsonFailsCleanlyWhenGhMissing(t *testing.T) {
+	output, err := runGhDeleteOutdateActionsScript(
+		t,
+		[]string{"PATH=/usr/bin:/bin"},
+		"--json",
+		"--dry-run",
+		"--owner", "acme",
+		"--repo", "widget",
+		"--cutoff-epoch", "1800000000",
+	)
+	if err == nil {
+		t.Fatalf("expected command to fail without gh:\n%s", output)
+	}
+
+	result := decodeGhDeleteOutdateActionsResult(t, output)
+	if result.OK {
+		t.Fatalf("expected failure result: %#v", result)
+	}
+	if result.Error != "required command not found: gh" {
+		t.Fatalf("unexpected error: %#v", result)
+	}
+	if result.ExitCode != 1 {
+		t.Fatalf("unexpected exit code: %#v", result)
+	}
+	if result.GhStderr != "" {
+		t.Fatalf("unexpected gh stderr: %#v", result)
+	}
+	if result.DeletedRunCount != 0 || len(result.DeletedRunIDs) != 0 {
+		t.Fatalf("unexpected deleted state: %#v", result)
+	}
+}
+
 func TestGhDeleteOutdateActionsScriptDryRunFindsCandidatesWithoutDeleting(t *testing.T) {
 	env, _, deleteLogPath := setupFakeGh(t)
 
