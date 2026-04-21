@@ -161,7 +161,7 @@ collect_candidates() {
     fi
 
     pages=$(( (total_count + PER_PAGE - 1) / PER_PAGE ))
-    query=".workflow_runs[] | select(.created_at == null or (.created_at | fromdateiso8601) < $CUTOFF_EPOCH) | [.id, (.created_at // \"\"), (.name // \"\"), (.head_branch // \"\")] | @tsv"
+    query=".workflow_runs[] | select(.created_at != null and (.created_at | fromdateiso8601) < $CUTOFF_EPOCH) | [.id, .created_at, (.name // \"\"), (.head_branch // \"\")] | @tsv"
 
     page=1
     while [ "$page" -le "$pages" ]; do

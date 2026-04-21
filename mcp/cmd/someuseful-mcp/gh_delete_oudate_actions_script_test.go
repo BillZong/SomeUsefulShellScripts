@@ -89,7 +89,8 @@ func setupFakeGh(t *testing.T) ([]string, string, string) {
 		"102|1900000000|2030-03-17T17:46:40Z|new-main|main",
 	)
 	writeFakeGhFixture(t, filepath.Join(fixtureDir, "page-2.txt"),
-		"103|||legacy-cleanup|stale",
+		"103|1600000000|2020-09-13T12:26:40Z|legacy-cleanup|stale",
+		"104|||unknown-created-at|mystery",
 	)
 
 	fakeGhScript := `#!/usr/bin/env bash
@@ -154,7 +155,7 @@ fixture="$FAKE_GH_FIXTURE_DIR/page-$page.txt"
 while IFS='|' read -r id created_epoch created_at name branch; do
   [ -n "$id" ] || continue
 
-  if [ -z "$created_epoch" ] || [ "$created_epoch" -lt "$cutoff" ]; then
+  if [ -n "$created_epoch" ] && [ "$created_epoch" -lt "$cutoff" ]; then
     printf '%s\t%s\t%s\t%s\n' "$id" "$created_at" "$name" "$branch"
   fi
 done < "$fixture"
@@ -343,6 +344,11 @@ func TestGhDeleteOutdateActionsScriptPaginatesAndFiltersCandidates(t *testing.T)
 	if result.MatchedRunCount != 2 {
 		t.Fatalf("unexpected matched count: %#v", result)
 	}
+	for _, matchedRun := range result.MatchedRuns {
+		if matchedRun.ID == 104 {
+			t.Fatalf("null created_at run should not match cutoff deletion: %#v", result.MatchedRuns)
+		}
+	}
 
 	logs := readLinesOrEmpty(t, logPath)
 	var sawPageTwo bool
@@ -388,6 +394,11 @@ func TestGhDeleteOutdateActionsScriptDeletesExpectedRunsInExecuteMode(t *testing
 	}
 	if deletes[0] != "101" || deletes[1] != "103" {
 		t.Fatalf("unexpected deleted ids: %#v", deletes)
+	}
+	for _, deletedID := range deletes {
+		if deletedID == "104" {
+			t.Fatalf("null created_at run should not be deleted: %#v", deletes)
+		}
 	}
 }
 
