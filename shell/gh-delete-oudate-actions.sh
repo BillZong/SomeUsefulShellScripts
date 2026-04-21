@@ -15,6 +15,8 @@ CONFIRMED=0
 OWNER=""
 REPO=""
 CUTOFF_EPOCH=""
+GH_API_ERROR_STATUS=0
+GH_API_ERROR_STDERR=""
 
 if ! declare -F suss_die >/dev/null 2>&1; then
     suss_die() {
@@ -77,17 +79,29 @@ EOF
 
 emit_error() {
     local message=$1
+    local exit_code=${2:-1}
+    local gh_stderr=${3:-}
 
     if [ "$JSON_OUTPUT" -eq 1 ]; then
         printf '{\n'
         printf '  "ok": false,\n'
-        printf '  "error": "%s"\n' "$(suss_json_escape "$message")"
+        printf '  "error": "%s",\n' "$(suss_json_escape "$message")"
+        printf '  "exitCode": %s' "$exit_code"
+        if [ -n "$gh_stderr" ]; then
+            printf ',\n'
+            printf '  "ghStderr": "%s"\n' "$(suss_json_escape "$gh_stderr")"
+        else
+            printf '\n'
+        fi
         printf '}\n'
     else
         printf '%s: %s\n' "$PROGRAM_NAME" "$message" >&2
+        if [ -n "$gh_stderr" ]; then
+            printf '%s\n' "$gh_stderr" >&2
+        fi
     fi
 
-    exit 1
+    exit "$exit_code"
 }
 
 json_print_runs() {
@@ -138,15 +152,38 @@ json_print_ids() {
 }
 
 gh_api() {
-    gh api "$@"
+    local stderr_file output status
+
+    stderr_file=$(mktemp "${TMPDIR:-/tmp}/gh-delete-oudate-actions-ghstderr.XXXXXX")
+    set +e
+    output=$(gh api "$@" 2>"$stderr_file")
+    status=$?
+    set -e
+
+    if [ "$status" -ne 0 ]; then
+        GH_API_ERROR_STATUS=$status
+        GH_API_ERROR_STDERR=$(cat "$stderr_file")
+        rm -f "$stderr_file"
+        return "$status"
+    fi
+
+    GH_API_ERROR_STATUS=0
+    GH_API_ERROR_STDERR=""
+    rm -f "$stderr_file"
+
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+    fi
 }
 
 fetch_total_count() {
+    local output_file=$1
+
     gh_api -X GET -H "Accept: application/vnd.github+json" \
         "/repos/$OWNER/$REPO/actions/runs" \
         -q '.total_count' \
         -F per_page=1 \
-        -F page=1
+        -F page=1 > "$output_file" || emit_error "gh api request failed" "$GH_API_ERROR_STATUS" "$GH_API_ERROR_STDERR"
 }
 
 collect_candidates() {
@@ -169,7 +206,7 @@ collect_candidates() {
             "/repos/$OWNER/$REPO/actions/runs" \
             -q "$query" \
             -F per_page="$PER_PAGE" \
-            -F page="$page" >> "$output_file"
+            -F page="$page" >> "$output_file" || emit_error "gh api request failed" "$GH_API_ERROR_STATUS" "$GH_API_ERROR_STDERR"
         page=$((page + 1))
     done
 }
@@ -183,7 +220,7 @@ delete_candidates() {
 
     while IFS=$'\t' read -r id created_at name head_branch; do
         [ -n "$id" ] || continue
-        gh_api -X DELETE -H "Accept: application/vnd.github+json" "/repos/$OWNER/$REPO/actions/runs/$id"
+        gh_api -X DELETE -H "Accept: application/vnd.github+json" "/repos/$OWNER/$REPO/actions/runs/$id" || emit_error "gh api request failed" "$GH_API_ERROR_STATUS" "$GH_API_ERROR_STDERR"
         printf '%s\n' "$id" >> "$deleted_ids_file"
     done < "$candidates_file"
 }
@@ -317,7 +354,9 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 CANDIDATES_FILE="$TMP_DIR/candidates.tsv"
 DELETED_IDS_FILE="$TMP_DIR/deleted-ids.txt"
-TOTAL_COUNT=$(fetch_total_count)
+TOTAL_COUNT_FILE="$TMP_DIR/total-count.txt"
+fetch_total_count "$TOTAL_COUNT_FILE"
+TOTAL_COUNT=$(tr -d '\n' < "$TOTAL_COUNT_FILE")
 
 if ! suss_is_integer "$TOTAL_COUNT" || [ "$TOTAL_COUNT" -lt 0 ]; then
     emit_error "unexpected total_count from gh api: $TOTAL_COUNT"

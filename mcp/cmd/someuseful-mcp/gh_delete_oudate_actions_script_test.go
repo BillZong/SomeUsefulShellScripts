@@ -18,18 +18,21 @@ type ghDeleteOutdateActionsMatchedRun struct {
 }
 
 type ghDeleteOutdateActionsResult struct {
-	OK              bool                                `json:"ok"`
-	Repository      string                              `json:"repository"`
-	Owner           string                              `json:"owner"`
-	Repo            string                              `json:"repo"`
-	CutoffEpoch     int64                               `json:"cutoffEpoch"`
-	DryRun          bool                                `json:"dryRun"`
-	Mode            string                              `json:"mode"`
-	Confirmed       bool                                `json:"confirmed"`
-	MatchedRunCount int                                 `json:"matchedRunCount"`
-	DeletedRunCount int                                 `json:"deletedRunCount"`
-	MatchedRuns     []ghDeleteOutdateActionsMatchedRun  `json:"matchedRuns"`
-	DeletedRunIDs   []int64                             `json:"deletedRunIds"`
+	OK              bool                              `json:"ok"`
+	Error           string                            `json:"error"`
+	ExitCode        int                               `json:"exitCode"`
+	GhStderr        string                            `json:"ghStderr"`
+	Repository      string                            `json:"repository"`
+	Owner           string                            `json:"owner"`
+	Repo            string                            `json:"repo"`
+	CutoffEpoch     int64                             `json:"cutoffEpoch"`
+	DryRun          bool                              `json:"dryRun"`
+	Mode            string                            `json:"mode"`
+	Confirmed       bool                              `json:"confirmed"`
+	MatchedRunCount int                               `json:"matchedRunCount"`
+	DeletedRunCount int                               `json:"deletedRunCount"`
+	MatchedRuns     []ghDeleteOutdateActionsMatchedRun `json:"matchedRuns"`
+	DeletedRunIDs   []int64                           `json:"deletedRunIds"`
 }
 
 func runGhDeleteOutdateActionsScript(t *testing.T, env []string, args ...string) (string, error) {
@@ -139,11 +142,19 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$method" = "DELETE" ]; then
+  if [ -n "${FAKE_GH_FAIL_DELETE_ID:-}" ] && [ "${path##*/}" = "$FAKE_GH_FAIL_DELETE_ID" ]; then
+    printf '%s\n' "${FAKE_GH_FAIL_MESSAGE:-delete failed}" >&2
+    exit "${FAKE_GH_FAIL_EXIT:-1}"
+  fi
   printf '%s\n' "${path##*/}" >> "$FAKE_GH_DELETE_LOG"
   exit 0
 fi
 
 if [ "$query" = ".total_count" ]; then
+  if [ "${FAKE_GH_FAIL_MODE:-}" = "total_count" ]; then
+    printf '%s\n' "${FAKE_GH_FAIL_MESSAGE:-auth required}" >&2
+    exit "${FAKE_GH_FAIL_EXIT:-4}"
+  fi
   cat "$FAKE_GH_FIXTURE_DIR/total_count.txt"
   exit 0
 fi
@@ -427,5 +438,84 @@ func TestGhDeleteOutdateActionsScriptJsonOutputShape(t *testing.T) {
 	}
 	if result.Mode == "" {
 		t.Fatalf("missing mode: %#v", result)
+	}
+}
+
+func TestGhDeleteOutdateActionsScriptJsonDryRunRuntimeFailure(t *testing.T) {
+	env, _, deleteLogPath := setupFakeGh(t)
+	env = append(env,
+		"FAKE_GH_FAIL_MODE=total_count",
+		"FAKE_GH_FAIL_MESSAGE=auth required",
+		"FAKE_GH_FAIL_EXIT=4",
+	)
+
+	output, err := runGhDeleteOutdateActionsScript(
+		t,
+		env,
+		"--json",
+		"--dry-run",
+		"--owner", "acme",
+		"--repo", "widget",
+		"--cutoff-epoch", "1800000000",
+	)
+	if err == nil {
+		t.Fatalf("expected dry-run runtime failure:\n%s", output)
+	}
+
+	result := decodeGhDeleteOutdateActionsResult(t, output)
+	if result.OK {
+		t.Fatalf("expected failure result: %#v", result)
+	}
+	if result.Error != "gh api request failed" {
+		t.Fatalf("unexpected error: %#v", result)
+	}
+	if result.ExitCode != 4 {
+		t.Fatalf("unexpected exit code: %#v", result)
+	}
+	if result.GhStderr != "auth required" {
+		t.Fatalf("unexpected gh stderr: %#v", result)
+	}
+	if deletes := readLinesOrEmpty(t, deleteLogPath); len(deletes) != 0 {
+		t.Fatalf("dry-run runtime failure should not delete: %#v", deletes)
+	}
+}
+
+func TestGhDeleteOutdateActionsScriptJsonExecuteRuntimeFailure(t *testing.T) {
+	env, _, deleteLogPath := setupFakeGh(t)
+	env = append(env,
+		"FAKE_GH_FAIL_DELETE_ID=101",
+		"FAKE_GH_FAIL_MESSAGE=delete failed",
+		"FAKE_GH_FAIL_EXIT=22",
+	)
+
+	output, err := runGhDeleteOutdateActionsScript(
+		t,
+		env,
+		"--json",
+		"--execute",
+		"--yes",
+		"--owner", "acme",
+		"--repo", "widget",
+		"--cutoff-epoch", "1800000000",
+	)
+	if err == nil {
+		t.Fatalf("expected execute runtime failure:\n%s", output)
+	}
+
+	result := decodeGhDeleteOutdateActionsResult(t, output)
+	if result.OK {
+		t.Fatalf("expected failure result: %#v", result)
+	}
+	if result.Error != "gh api request failed" {
+		t.Fatalf("unexpected error: %#v", result)
+	}
+	if result.ExitCode != 22 {
+		t.Fatalf("unexpected exit code: %#v", result)
+	}
+	if result.GhStderr != "delete failed" {
+		t.Fatalf("unexpected gh stderr: %#v", result)
+	}
+	if deletes := readLinesOrEmpty(t, deleteLogPath); len(deletes) != 0 {
+		t.Fatalf("failed delete should not record successful deletions: %#v", deletes)
 	}
 }
