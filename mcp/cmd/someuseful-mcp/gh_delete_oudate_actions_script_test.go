@@ -515,7 +515,58 @@ func TestGhDeleteOutdateActionsScriptJsonExecuteRuntimeFailure(t *testing.T) {
 	if result.GhStderr != "delete failed" {
 		t.Fatalf("unexpected gh stderr: %#v", result)
 	}
+	if result.DeletedRunCount != 0 || len(result.DeletedRunIDs) != 0 {
+		t.Fatalf("first delete failure should not report successful deletions: %#v", result)
+	}
 	if deletes := readLinesOrEmpty(t, deleteLogPath); len(deletes) != 0 {
 		t.Fatalf("failed delete should not record successful deletions: %#v", deletes)
+	}
+}
+
+func TestGhDeleteOutdateActionsScriptJsonExecuteRuntimeFailureAfterPartialSuccess(t *testing.T) {
+	env, _, deleteLogPath := setupFakeGh(t)
+	env = append(env,
+		"FAKE_GH_FAIL_DELETE_ID=103",
+		"FAKE_GH_FAIL_MESSAGE=delete failed on second run",
+		"FAKE_GH_FAIL_EXIT=22",
+	)
+
+	output, err := runGhDeleteOutdateActionsScript(
+		t,
+		env,
+		"--json",
+		"--execute",
+		"--yes",
+		"--owner", "acme",
+		"--repo", "widget",
+		"--cutoff-epoch", "1800000000",
+	)
+	if err == nil {
+		t.Fatalf("expected execute runtime failure after partial success:\n%s", output)
+	}
+
+	result := decodeGhDeleteOutdateActionsResult(t, output)
+	if result.OK {
+		t.Fatalf("expected failure result: %#v", result)
+	}
+	if result.Error != "gh api request failed" {
+		t.Fatalf("unexpected error: %#v", result)
+	}
+	if result.ExitCode != 22 {
+		t.Fatalf("unexpected exit code: %#v", result)
+	}
+	if result.GhStderr != "delete failed on second run" {
+		t.Fatalf("unexpected gh stderr: %#v", result)
+	}
+	if result.DeletedRunCount != 1 {
+		t.Fatalf("unexpected partial deleted count: %#v", result)
+	}
+	if len(result.DeletedRunIDs) != 1 || result.DeletedRunIDs[0] != 101 {
+		t.Fatalf("unexpected partial deleted ids: %#v", result)
+	}
+
+	deletes := readLinesOrEmpty(t, deleteLogPath)
+	if len(deletes) != 1 || deletes[0] != "101" {
+		t.Fatalf("unexpected delete log for partial success: %#v", deletes)
 	}
 }

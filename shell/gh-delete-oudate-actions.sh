@@ -81,23 +81,46 @@ emit_error() {
     local message=$1
     local exit_code=${2:-1}
     local gh_stderr=${3:-}
+    local deleted_count=0
 
     if [ "$JSON_OUTPUT" -eq 1 ]; then
+        if [ -n "${DELETED_IDS_FILE:-}" ] && [ -f "${DELETED_IDS_FILE:-}" ]; then
+            deleted_count=$(wc -l < "$DELETED_IDS_FILE" | awk '{print $1}')
+        fi
+
         printf '{\n'
         printf '  "ok": false,\n'
         printf '  "error": "%s",\n' "$(suss_json_escape "$message")"
         printf '  "exitCode": %s' "$exit_code"
         if [ -n "$gh_stderr" ]; then
             printf ',\n'
-            printf '  "ghStderr": "%s"\n' "$(suss_json_escape "$gh_stderr")"
+            printf '  "ghStderr": "%s",\n' "$(suss_json_escape "$gh_stderr")"
         else
-            printf '\n'
+            printf ',\n'
         fi
+        printf '  "deletedRunCount": %s,\n' "$deleted_count"
+        printf '  "deletedRunIds": '
+        if [ -n "${DELETED_IDS_FILE:-}" ] && [ -f "${DELETED_IDS_FILE:-}" ]; then
+            json_print_ids "$DELETED_IDS_FILE"
+        else
+            printf '[]'
+        fi
+        printf '\n'
         printf '}\n'
     else
         printf '%s: %s\n' "$PROGRAM_NAME" "$message" >&2
         if [ -n "$gh_stderr" ]; then
             printf '%s\n' "$gh_stderr" >&2
+        fi
+        if [ -n "${DELETED_IDS_FILE:-}" ] && [ -f "${DELETED_IDS_FILE:-}" ]; then
+            deleted_count=$(wc -l < "$DELETED_IDS_FILE" | awk '{print $1}')
+            if [ "$deleted_count" -gt 0 ]; then
+                printf 'deleted run ids before failure:\n' >&2
+                while IFS= read -r deleted_id; do
+                    [ -n "$deleted_id" ] || continue
+                    printf '  - %s\n' "$deleted_id" >&2
+                done < "$DELETED_IDS_FILE"
+            fi
         fi
     fi
 
