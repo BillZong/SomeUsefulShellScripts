@@ -46,7 +46,7 @@
 | `shell/docker-show-images-arch.sh` | docker | 查看镜像架构 | `docker` | L | rewrite | MCP | 非常适合先做 MCP |
 | `shell/du-dir.sh` | filesystem | 查看目录体积 | `du`, `sort` | L | rewrite | MCP | 需要修复 glob/空目录兼容性 |
 | `shell/eth-keystore-2-privatekey.sh` | ethereum | keystore 导出私钥 | `node`, `npm` | H | rewrite | Local-only | 涉及私钥，不建议暴露给通用 Agent |
-| `shell/gh-delete-oudate-actions.sh` | GitHub Actions | 删除过期 workflow runs | `gh` | H | rewrite | Skill | 需要分页、dry-run、确认机制 |
+| `shell/gh-delete-oudate-actions.sh` | GitHub Actions | 删除过期 workflow runs | `gh` | H | keep | Skill | 已完成分页、dry-run、显式确认加固；适合作为 guarded skill 的底层命令 |
 | `shell/gh-post-release-example.sh` | GitHub release | tag push 后构建并上传 release | `make`, `gh-upload-release.sh` | M | archive | Archive | 更像历史示例，不像通用工具 |
 | `shell/gh-upload-release.sh` | GitHub release | 创建 release 并上传产物 | `git`, `github-release`, `go` | H | rewrite | Skill | 逻辑有价值，但实现老旧且有 `eval` 风险 |
 | `shell/git-clean-after-rm.sh` | git maintenance | 清理 refs/reflog/gc | `git` | H | keep | Local-only | 可保留为手工维护命令 |
@@ -110,4 +110,3 @@
 
 - 本地手工命令；
 - 或者仅被带强确认的 skill 间接调用。
-
